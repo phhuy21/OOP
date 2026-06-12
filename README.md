@@ -18,13 +18,17 @@ Dưới đây là một số hình ảnh demo trực quan về giao diện và c
 Giao diện được thiết kế theo phong cách tối giản, sử dụng hiệu ứng kính mờ (Glassmorphism) và hỗ trợ hiển thị tốt trên cả máy tính lẫn điện thoại di động:
 ![SkyGate Dashboard](docs/images/dashboard.png)
 
-### Sơ đồ ghế ngồi tương tác (Seat Map Modal)
-Khi check-in cho hành khách, hệ thống hiển thị sơ đồ ghế ngồi trực quan để người dùng nhấn chọn vị trí trống (ghế đã đặt sẽ tự động khóa và chuyển màu đỏ):
-![Interactive Seat Map](docs/images/seatmap.png)
-
-### Danh sách Sân bay & Cập nhật Thời tiết
-Người dùng có thể giám sát đường băng, cổng đỗ (gate), nhân sự trực ban và cập nhật tình hình thời tiết thời gian thực tại mỗi sân bay:
+### Giám sát Sân bay & Cập nhật Thời tiết
+Giám sát trạng thái hoạt động của đường băng, cổng đỗ (gate), phân bổ nhân viên trực ban và cập nhật tình tiết thời tiết trực quan:
 ![Airports & Weather Monitor](docs/images/airports.png)
+
+### Quản lý Nhân sự & Hành khách
+Bảng dữ liệu phi công, nhân viên mặt đất và danh sách hành khách được cấu trúc thành các cột dọc nhỏ gọn với thanh cuộn độc lập:
+![Personnel & Passenger Management](docs/images/people.png)
+
+### Giao diện Tạo chuyến bay mới
+Form cấu hình tạo chuyến bay kết hợp tự động gán máy bay, tổ bay trực ban, lựa chọn gate đỗ và đặt chỗ hành khách:
+![Create New Flight](docs/images/create_flight.png)
 
 ---
 
