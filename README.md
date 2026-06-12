@@ -1,6 +1,6 @@
 # SkyGate — Intelligent Airport Management System
 
-Hệ thống mô phỏng quản lý sân bay thông minh (SkyGate) được xây dựng trên nền tảng C++ hướng đối tượng (OOP) ở Backend kết hợp với giao diện Web (HTML/CSS/JS) hiện đại ở Frontend thông qua giao thức truyền tải REST API. Đây là dự án Bài tập lớn hoàn thành môn học Lập trình hướng đối tượng (LTHDT) của Nhóm 5 — Trường Đại học Sư phạm Kỹ thuật TP.HCM (HCMUTE).
+Hệ thống mô phỏng quản lý sân bay thông minh (SkyGate) được xây dựng trên nền tảng C++ hướng đối tượng (OOP) ở Backend kết hợp với giao diện Web (HTML/CSS/JS) hiện đại ở Frontend thông qua giao thức truyền tải REST API. Đây là dự án Bài tập lớn hoàn thành môn học Lập trình hướng đối tượng (LTHDT) của Nhóm 5 — Trường Đại học Công Nghệ Kỹ thuật TP.HCM (HCMUTE).
 
 ---
 
@@ -126,7 +126,7 @@ cmake --build . --config Release
 
 ---
 
-## 6. Thành viên thực hiện (Nhóm 5)
+## 6. Thành viên thực hiện
 
 *   **Nguyễn Ngọc Phi**
 *   **Trần Thu Hằng**
