@@ -128,8 +128,8 @@ cmake --build . --config Release
 
 ## 6. Thành viên thực hiện
 
-*   **Nguyễn Ngọc Phi**
-*   **Trần Thu Hằng**
-*   **Lê Hồng Quang**
-*   **Nguyễn Tấn Lộc**
-*   **Phùng Chí Huy**
+*   **Nguyễn Ngọc Trường Phi**
+*   **Nguyễn Thị Thúy Hằng**
+*   **Vũ Minh Quang**
+*   **Nguyễn Đức Lộc**
+*   **Phạm Gia Huy**
