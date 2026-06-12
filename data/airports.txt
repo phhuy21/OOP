@@ -1,0 +1,4 @@
+PHG|San bay Quoc te Phuong Hoang|Trung tam, nhieu loai may bay
+CLG|San bay Quoc te Cuu Long|Than hep va mot so chuyen lon
+HAU|San bay Dao Hai Au|Chi may bay nho / canh quat
+MHA|San bay Thung Lung Muong Hoa|Vung cao, han che ha tang

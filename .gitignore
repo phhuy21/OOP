@@ -1,0 +1,33 @@
+# Executables
+*.exe
+*.o
+*.obj
+*.out
+
+# Build directories
+build/
+bin/
+out/
+
+# Log files and temp files
+*.log
+build_log.txt
+err.txt
+coordinator_state.json
+
+# IDEs and Editors
+.vscode/
+.idea/
+.codegraph/
+.claude/
+*.suo
+*.user
+*.userossc
+*.sln
+*.vcxproj
+*.filters
+*.proto
+
+# OS generated files
+.DS_Store
+Thumbs.db

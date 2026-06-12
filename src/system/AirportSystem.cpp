@@ -1,0 +1,910 @@
+#include "AirportSystem.h"
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+#include "../aircraft/AircraftFactory.h"
+#include "../common/Utils.h"
+
+namespace skygate {
+
+namespace fs = std::filesystem;
+using utils::buildRecord;
+using utils::parseRecord;
+
+// ===========================================================================
+//  Tiện ích nội bộ
+// ===========================================================================
+namespace {
+
+std::vector<std::string> splitList(const std::string& s) {
+    std::vector<std::string> out;
+    if (s.empty()) return out;
+    for (auto& part : utils::split(s, ',')) {
+        std::string t = utils::trim(part);
+        if (!t.empty()) out.push_back(t);
+    }
+    return out;
+}
+
+std::string joinList(const std::vector<std::string>& items) {
+    return utils::join(items, ',');
+}
+
+}  // namespace
+
+// ===========================================================================
+//  Sân bay / gate / đường băng
+// ===========================================================================
+OpResult AirportSystem::addAirport(const std::string& code, const std::string& name,
+                                   const std::string& note) {
+    if (code.empty()) return OpResult::failure("Mã sân bay không được rỗng.");
+    if (findAirport(code)) return OpResult::failure("Mã sân bay đã tồn tại: " + code);
+    airports_.push_back(std::make_shared<Airport>(code, name, note));
+    return OpResult::success("Đã thêm sân bay " + code + ".");
+}
+
+OpResult AirportSystem::addRunway(const std::string& airportCode, const std::string& runwayCode,
+                                  int lengthMeters) {
+    Airport* a = findAirport(airportCode);
+    if (!a) return OpResult::failure("Không tìm thấy sân bay " + airportCode);
+    if (lengthMeters <= 0) return OpResult::failure("Chiều dài đường băng phải > 0.");
+    a->addRunway(Runway(runwayCode, lengthMeters));
+    return OpResult::success("Đã thêm đường băng " + runwayCode + " cho " + airportCode + ".");
+}
+
+OpResult AirportSystem::addGate(const std::string& airportCode, const std::string& gateCode,
+                                GateType type) {
+    Airport* a = findAirport(airportCode);
+    if (!a) return OpResult::failure("Không tìm thấy sân bay " + airportCode);
+    if (a->findGate(gateCode)) return OpResult::failure("Gate đã tồn tại: " + gateCode);
+    a->addGate(Gate(gateCode, type));
+    return OpResult::success("Đã thêm gate " + gateCode + " (" + toString(type) + ").");
+}
+
+Airport* AirportSystem::findAirport(const std::string& code) {
+    for (auto& a : airports_) if (a->code() == code) return a.get();
+    return nullptr;
+}
+
+// ===========================================================================
+//  Máy bay
+// ===========================================================================
+OpResult AirportSystem::addAircraft(AircraftCategory category, const std::string& registration,
+                                    const std::string& model, int capacity) {
+    if (registration.empty()) return OpResult::failure("Số hiệu máy bay không được rỗng.");
+    if (findAircraft(registration)) return OpResult::failure("Máy bay đã tồn tại: " + registration);
+    if (capacity <= 0) return OpResult::failure("Sức chứa phải > 0.");
+    aircrafts_.push_back(AircraftFactory::create(category, registration, model, capacity));
+    return OpResult::success("Đã thêm máy bay " + registration + " (" + toString(category) + ").");
+}
+
+std::shared_ptr<Aircraft> AirportSystem::findAircraft(const std::string& registration) {
+    for (auto& a : aircrafts_) if (a->registration() == registration) return a;
+    return nullptr;
+}
+
+// ===========================================================================
+//  Con người
+// ===========================================================================
+OpResult AirportSystem::addPilot(const std::string& id, const std::string& name, int age,
+                                 const std::string& phone, const std::string& base) {
+    if (id.empty()) return OpResult::failure("Mã phi công không được rỗng.");
+    if (findPilot(id)) return OpResult::failure("Phi công đã tồn tại: " + id);
+    pilots_.push_back(std::make_shared<Pilot>(id, name, age, phone, base));
+    return OpResult::success("Đã thêm phi công " + id + ".");
+}
+
+OpResult AirportSystem::addPilotCertification(const std::string& pilotId, AircraftCategory cat) {
+    auto p = findPilot(pilotId);
+    if (!p) return OpResult::failure("Không tìm thấy phi công " + pilotId);
+    p->addCertification(cat);
+    return OpResult::success("Đã cấp chứng chỉ " + toString(cat) + " cho " + pilotId + ".");
+}
+
+OpResult AirportSystem::addGroundStaff(const std::string& id, const std::string& name, int age,
+                                       const std::string& phone, const std::string& base,
+                                       const std::string& department) {
+    if (id.empty()) return OpResult::failure("Mã nhân viên không được rỗng.");
+    if (findGroundStaff(id)) return OpResult::failure("Nhân viên đã tồn tại: " + id);
+    ground_.push_back(std::make_shared<GroundStaff>(id, name, age, phone, base, department));
+    return OpResult::success("Đã thêm nhân viên mặt đất " + id + ".");
+}
+
+OpResult AirportSystem::addPassenger(const std::string& id, const std::string& name, int age,
+                                     const std::string& phone, const std::string& passport) {
+    if (id.empty()) return OpResult::failure("Mã hành khách không được rỗng.");
+    if (findPassenger(id)) return OpResult::failure("Hành khách đã tồn tại: " + id);
+    passengers_.push_back(std::make_shared<Passenger>(id, name, age, phone, passport));
+    return OpResult::success("Đã thêm hành khách " + id + ".");
+}
+
+OpResult AirportSystem::setPassengerBaggage(const std::string& passengerId, int pieces,
+                                            double weightKg) {
+    auto p = findPassenger(passengerId);
+    if (!p) return OpResult::failure("Không tìm thấy hành khách " + passengerId);
+    p->setBaggage(Baggage(pieces, weightKg));
+    std::string msg = "Đã cập nhật hành lý cho " + passengerId + ": " + p->baggage().describe() + ".";
+    return OpResult::success(msg);
+}
+
+std::shared_ptr<Pilot> AirportSystem::findPilot(const std::string& id) {
+    for (auto& p : pilots_) if (p->id() == id) return p;
+    return nullptr;
+}
+std::shared_ptr<GroundStaff> AirportSystem::findGroundStaff(const std::string& id) {
+    for (auto& g : ground_) if (g->id() == id) return g;
+    return nullptr;
+}
+std::shared_ptr<Passenger> AirportSystem::findPassenger(const std::string& id) {
+    for (auto& p : passengers_) if (p->id() == id) return p;
+    return nullptr;
+}
+
+// ===========================================================================
+//  Tổ bay
+// ===========================================================================
+OpResult AirportSystem::createCrew(const std::string& crewId) {
+    if (crewId.empty()) return OpResult::failure("Mã tổ bay không được rỗng.");
+    if (findCrew(crewId)) return OpResult::failure("Tổ bay đã tồn tại: " + crewId);
+    crews_.push_back(std::make_shared<Crew>(crewId));
+    return OpResult::success("Đã tạo tổ bay " + crewId + ".");
+}
+
+OpResult AirportSystem::addPilotToCrew(const std::string& crewId, const std::string& pilotId) {
+    auto c = findCrew(crewId);
+    if (!c) return OpResult::failure("Không tìm thấy tổ bay " + crewId);
+    auto p = findPilot(pilotId);
+    if (!p) return OpResult::failure("Không tìm thấy phi công " + pilotId);
+    c->addPilot(p);
+    return OpResult::success("Đã thêm phi công " + pilotId + " vào tổ bay " + crewId + ".");
+}
+
+OpResult AirportSystem::addGroundToCrew(const std::string& crewId, const std::string& groundId) {
+    auto c = findCrew(crewId);
+    if (!c) return OpResult::failure("Không tìm thấy tổ bay " + crewId);
+    auto g = findGroundStaff(groundId);
+    if (!g) return OpResult::failure("Không tìm thấy nhân viên " + groundId);
+    c->addGroundStaff(g);
+    return OpResult::success("Đã thêm NV mặt đất " + groundId + " vào tổ bay " + crewId + ".");
+}
+
+std::shared_ptr<Crew> AirportSystem::findCrew(const std::string& id) {
+    for (auto& c : crews_) if (c->id() == id) return c;
+    return nullptr;
+}
+
+// ===========================================================================
+//  Chuyến bay
+// ===========================================================================
+OpResult AirportSystem::createFlight(const std::string& code, const std::string& origin,
+                                     const std::string& dest, const std::string& departure,
+                                     const std::string& arrival) {
+    if (code.empty()) return OpResult::failure("Mã chuyến bay không được rỗng.");
+    if (findFlight(code)) return OpResult::failure("Chuyến bay đã tồn tại: " + code);
+    if (!findAirport(origin)) return OpResult::failure("Sân bay đi không tồn tại: " + origin);
+    if (!findAirport(dest)) return OpResult::failure("Sân bay đến không tồn tại: " + dest);
+    if (origin == dest) return OpResult::failure("Sân bay đi và đến phải khác nhau.");
+
+    DateTime dep = DateTime::parse(departure);
+    DateTime arr = DateTime::parse(arrival);
+    if (!dep.isValid()) return OpResult::failure("Giờ đi không hợp lệ (định dạng YYYY-MM-DD HH:MM).");
+    if (!arr.isValid()) return OpResult::failure("Giờ đến không hợp lệ (định dạng YYYY-MM-DD HH:MM).");
+    if (arr <= dep) return OpResult::failure("Giờ đến phải sau giờ đi.");
+
+    flights_.push_back(std::make_shared<Flight>(code, origin, dest, dep, arr));
+    logEvent("Tạo chuyến " + code + " (" + origin + "->" + dest + ").");
+    return OpResult::success("Đã tạo chuyến bay " + code + " (" + origin + "->" + dest + ").");
+}
+
+std::shared_ptr<Flight> AirportSystem::findFlight(const std::string& code) {
+    for (auto& f : flights_) if (f->code() == code) return f;
+    return nullptr;
+}
+
+OpResult AirportSystem::assignAircraft(const std::string& flightCode,
+                                       const std::string& registration) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    auto ac = findAircraft(registration);
+    if (!ac) return OpResult::failure("Không tìm thấy máy bay " + registration);
+
+    Airport* origin = findAirport(f->originCode());
+    Airport* dest = findAirport(f->destCode());
+    if (!origin || !dest) return OpResult::failure("Thiếu sân bay đi/đến cho chuyến.");
+
+    // Quy tắc đường băng: cả sân bay đi và đến phải có đường băng đủ dài.
+    if (!origin->hasRunwayFor(*ac)) {
+        return OpResult::failure("Sân bay đi " + origin->code() +
+                                 " không có đường băng đủ dài (cần >= " +
+                                 std::to_string(ac->requiredRunwayLength()) + "m).");
+    }
+    if (!dest->hasRunwayFor(*ac)) {
+        return OpResult::failure("Sân bay đến " + dest->code() +
+                                 " không có đường băng đủ dài (cần >= " +
+                                 std::to_string(ac->requiredRunwayLength()) + "m).");
+    }
+    // Quy tắc sức chứa.
+    if (static_cast<int>(f->passengers().size()) > ac->capacity()) {
+        return OpResult::failure("Số hành khách (" + std::to_string(f->passengers().size()) +
+                                 ") vượt sức chứa máy bay (" + std::to_string(ac->capacity()) + ").");
+    }
+
+    f->setAircraft(ac);
+    logEvent(flightCode + ": gán máy bay " + registration + ".");
+    return OpResult::success("Đã gán máy bay " + registration + " cho chuyến " + flightCode + ".");
+}
+
+OpResult AirportSystem::assignCrew(const std::string& flightCode, const std::string& crewId) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    auto c = findCrew(crewId);
+    if (!c) return OpResult::failure("Không tìm thấy tổ bay " + crewId);
+    if (!f->aircraft()) {
+        return OpResult::failure("Hãy gán máy bay trước để kiểm tra chứng chỉ tổ bay.");
+    }
+
+    auto issues = c->validateForFlight(f->aircraft()->category(), f->departure(), f->flightHours());
+    if (!issues.empty()) {
+        std::string m = "Không thể gán tổ bay:";
+        for (const auto& i : issues) m += "\n      - " + i;
+        return OpResult::failure(m);
+    }
+    f->setCrew(c);
+    logEvent(flightCode + ": gán tổ bay " + crewId + ".");
+    return OpResult::success("Đã gán tổ bay " + crewId + " cho chuyến " + flightCode + ".");
+}
+
+void AirportSystem::gateWindow(const Flight& flight, DateTime& outStart, DateTime& outEnd) {
+    long long turnaround = 60;  // mặc định nếu chưa gán máy bay
+    if (flight.aircraft()) turnaround = flight.aircraft()->minTurnaroundMinutes();
+    outStart = flight.departure().addMinutes(-turnaround);
+    outEnd = flight.departure().addMinutes(30);
+}
+
+OpResult AirportSystem::assignGate(const std::string& flightCode, const std::string& gateCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    if (!f->aircraft()) return OpResult::failure("Hãy gán máy bay trước khi gán gate.");
+    Airport* origin = findAirport(f->originCode());
+    if (!origin) return OpResult::failure("Không tìm thấy sân bay đi.");
+
+    DateTime start, end;
+    gateWindow(*f, start, end);
+
+    // Giải phóng gate cũ của chuyến này (nếu đổi gate).
+    for (auto& g : origin->gates()) g.releaseFlight(flightCode);
+
+    Gate* gate = nullptr;
+    if (gateCode.empty()) {
+        gate = origin->findAvailableGate(*f->aircraft(), start, end);
+        if (!gate) return OpResult::failure("Không còn gate phù hợp & trống tại " + origin->code() + ".");
+    } else {
+        gate = origin->findGate(gateCode);
+        if (!gate) return OpResult::failure("Không tìm thấy gate " + gateCode + ".");
+        if (!f->aircraft()->canUseGateType(gate->type())) {
+            return OpResult::failure("Gate " + gateCode + " (" + toString(gate->type()) +
+                                     ") không phù hợp máy bay loại " + f->aircraft()->categoryName() + ".");
+        }
+        if (!gate->isFreeDuring(start, end)) {
+            return OpResult::failure("Gate " + gateCode + " đã bị chiếm trong khung giờ này.");
+        }
+    }
+    gate->reserve(flightCode, start, end);
+    f->setGateCode(gate->code());
+    logEvent(flightCode + ": gán gate " + gate->code() + ".");
+    return OpResult::success("Đã gán gate " + gate->code() + " cho chuyến " + flightCode + ".");
+}
+
+OpResult AirportSystem::bookPassenger(const std::string& flightCode,
+                                      const std::string& passengerId) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    auto p = findPassenger(passengerId);
+    if (!p) return OpResult::failure("Không tìm thấy hành khách " + passengerId);
+    if (!p->flightCode().empty() && p->flightCode() != flightCode) {
+        return OpResult::failure("Hành khách đang thuộc chuyến khác: " + p->flightCode());
+    }
+    if (f->aircraft() &&
+        static_cast<int>(f->passengers().size()) >= f->aircraft()->capacity()) {
+        return OpResult::failure("Chuyến đã đầy (sức chứa " +
+                                 std::to_string(f->aircraft()->capacity()) + ").");
+    }
+    f->addPassenger(p);
+    logEvent(flightCode + ": đặt chỗ hành khách " + passengerId + ".");
+    return OpResult::success("Đã thêm hành khách " + passengerId + " vào chuyến " + flightCode + ".");
+}
+
+OpResult AirportSystem::checkIn(const std::string& flightCode, const std::string& passengerId,
+                                const std::string& seat) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    return f->checkInPassenger(passengerId, seat);
+}
+
+OpResult AirportSystem::board(const std::string& flightCode, const std::string& passengerId) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    return f->boardPassenger(passengerId);
+}
+
+std::vector<std::string> AirportSystem::validateCrewForFlight(const Flight& flight) const {
+    if (!flight.crew()) return {"Chưa gán tổ bay."};
+    if (!flight.aircraft()) return {"Chưa gán máy bay."};
+    return flight.crew()->validateForFlight(flight.aircraft()->category(),
+                                            flight.departure(), flight.flightHours());
+}
+
+OpResult AirportSystem::advanceFlight(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    auto issues = validateCrewForFlight(*f);
+    std::string oldStatus = f->statusName();
+    OpResult r = f->advance(issues);
+    if (r.ok) logEvent(flightCode + ": " + oldStatus + " -> " + f->statusName() + ".");
+    return r;
+}
+
+OpResult AirportSystem::delayFlight(const std::string& flightCode, long long minutes,
+                                    const std::string& reason) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    OpResult r = f->delay(minutes, reason);
+    if (r.ok)
+        logEvent(flightCode + ": HOÃN " + std::to_string(minutes) + " phút — " + reason + ".");
+    return r;
+}
+
+OpResult AirportSystem::cancelFlight(const std::string& flightCode, const std::string& reason) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    OpResult r = f->cancel(reason);
+    if (r.ok) {
+        logEvent(flightCode + ": HUỶ — " + reason + ".");
+        // Trả gate và loại khỏi hàng đợi.
+        Airport* origin = findAirport(f->originCode());
+        if (origin) for (auto& g : origin->gates()) g.releaseFlight(flightCode);
+        auto rm = [&](std::vector<std::string>& q) {
+            q.erase(std::remove(q.begin(), q.end(), flightCode), q.end());
+        };
+        rm(departureQueue_);
+        rm(arrivalQueue_);
+    }
+    return r;
+}
+
+void AirportSystem::setMarkEmergency(const std::string& flightCode, bool value) {
+    auto f = findFlight(flightCode);
+    if (f) f->setEmergency(value);
+}
+
+// ===========================================================================
+//  Đồng hồ mô phỏng & nhật ký sự kiện (chức năng mở rộng)
+// ===========================================================================
+void AirportSystem::logEvent(const std::string& text) {
+    std::string stamp = simulationTime_.isValid() ? simulationTime_.toString() : "--";
+    eventLog_.push_back(LogEntry{stamp, text});
+    // Giới hạn ~200 dòng gần nhất để nhật ký không phình vô hạn.
+    if (eventLog_.size() > 200)
+        eventLog_.erase(eventLog_.begin(),
+                        eventLog_.begin() + (eventLog_.size() - 200));
+}
+
+// Vị trí trên trục vòng đời tuyến tính (Scheduled..Completed = 0..9).
+// Delayed coi như mức Boarding (2) để advance() đưa nó về Boarding rồi tiếp tục;
+// Cancelled là sentinel kết thúc (100).
+int AirportSystem::lifecycleOrdinal(FlightStatus s) {
+    switch (s) {
+        case FlightStatus::Scheduled:  return 0;
+        case FlightStatus::CheckIn:    return 1;
+        case FlightStatus::Boarding:   return 2;
+        case FlightStatus::GateClosed: return 3;
+        case FlightStatus::Ready:      return 4;
+        case FlightStatus::Takeoff:    return 5;
+        case FlightStatus::InAir:      return 6;
+        case FlightStatus::Landed:     return 7;
+        case FlightStatus::Turnaround: return 8;
+        case FlightStatus::Completed:  return 9;
+        case FlightStatus::Delayed:    return 2;
+        case FlightStatus::Cancelled:  return 100;
+    }
+    return 0;
+}
+
+// Trạng thái mục tiêu của chuyến theo thời gian ảo hiện tại so với giờ đi/đến.
+// Cố ý nhắm InAir (không Takeoff) và Turnaround (không Landed) để vòng lặp ở
+// tickSimulation đi XUYÊN QUA các bước trung gian — Landed vẫn được kích hoạt
+// nên giờ bay của tổ bay vẫn được cộng dồn.
+FlightStatus AirportSystem::targetStatusFor(const Flight& f) const {
+    const DateTime& now = simulationTime_;
+    long long toDep = now.minutesUntil(f.departure());  // dep - now (>0: dep ở tương lai)
+    long long toArr = now.minutesUntil(f.arrival());    // arr - now
+
+    if (toDep > 120) return FlightStatus::Scheduled;
+    if (toDep > 40)  return FlightStatus::CheckIn;
+    if (toDep > 15)  return FlightStatus::Boarding;
+    if (toDep > 5)   return FlightStatus::GateClosed;
+    if (toDep > 0)   return FlightStatus::Ready;
+
+    if (toArr > 0)   return FlightStatus::InAir;  // đã tới giờ đi, chưa tới giờ đến
+
+    long long sinceArr = -toArr;  // số phút sau giờ đến
+    long long turn = f.aircraft() ? f.aircraft()->minTurnaroundMinutes() : 60;
+    if (sinceArr < turn) return FlightStatus::Turnaround;
+    return FlightStatus::Completed;
+}
+
+OpResult AirportSystem::tickSimulation(long long minutes) {
+    if (minutes < 0) return OpResult::failure("Số phút tua phải >= 0.");
+    if (!simulationTime_.isValid())
+        simulationTime_ = DateTime(2026, 6, 10, 6, 0);  // phòng thủ
+    simulationTime_ = simulationTime_.addMinutes(minutes);
+
+    int moved = 0;
+    for (auto& f : flights_) {
+        FlightStatus st = f->status();
+        if (st == FlightStatus::Cancelled || st == FlightStatus::Completed) continue;
+        // Chuyến đang hoãn: đưa về Boarding trước (tránh kẹt vì cùng ordinal).
+        if (st == FlightStatus::Delayed) advanceFlight(f->code());
+
+        FlightStatus target = targetStatusFor(*f);
+        int guard = 0;  // chặn vòng lặp vô hạn (vòng đời tối đa ~10 bước)
+        while (lifecycleOrdinal(f->status()) < lifecycleOrdinal(target) && guard++ < 12) {
+            OpResult r = advanceFlight(f->code());  // tái dùng: kiểm tra tổ bay + ghi log
+            if (!r.ok) break;  // vd chưa gán máy bay -> kẹt ở GateClosed, KHÔNG spam
+            ++moved;
+        }
+    }
+    logEvent("Tua thời gian +" + std::to_string(minutes) + " phút. " +
+             std::to_string(moved) + " bước chuyển trạng thái.");
+    return OpResult::success("Đồng hồ -> " + simulationTime_.toString() + " (" +
+                             std::to_string(moved) + " chuyển trạng thái).");
+}
+
+// ===========================================================================
+//  Hàng đợi cất / hạ cánh (chức năng mở rộng)
+// ===========================================================================
+OpResult AirportSystem::enqueueDeparture(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    if (f->isFinished()) return OpResult::failure("Chuyến đã kết thúc.");
+    if (std::find(departureQueue_.begin(), departureQueue_.end(), flightCode) != departureQueue_.end())
+        return OpResult::failure("Chuyến đã ở trong hàng đợi cất cánh.");
+    departureQueue_.push_back(flightCode);
+    return OpResult::success("Đã đưa " + flightCode + " vào hàng đợi cất cánh.");
+}
+
+OpResult AirportSystem::enqueueArrival(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    if (std::find(arrivalQueue_.begin(), arrivalQueue_.end(), flightCode) != arrivalQueue_.end())
+        return OpResult::failure("Chuyến đã ở trong hàng đợi hạ cánh.");
+    arrivalQueue_.push_back(flightCode);
+    return OpResult::success("Đã đưa " + flightCode + " vào hàng đợi hạ cánh.");
+}
+
+int AirportSystem::pickPriorityIndex(const std::vector<std::string>& queue) const {
+    int best = -1;
+    bool bestEmergency = false;
+    DateTime bestDep;
+    for (size_t i = 0; i < queue.size(); ++i) {
+        std::shared_ptr<Flight> f;
+        for (auto& fl : flights_) if (fl->code() == queue[i]) { f = fl; break; }
+        if (!f) continue;
+        bool em = f->emergency();
+        const DateTime& dep = f->departure();
+        bool take = false;
+        if (best == -1) {
+            take = true;
+        } else if (em != bestEmergency) {
+            take = em;  // ưu tiên chuyến khẩn cấp
+        } else {
+            take = dep < bestDep;  // cùng mức ưu tiên: giờ đi sớm hơn trước
+        }
+        if (take) {
+            best = static_cast<int>(i);
+            bestEmergency = em;
+            bestDep = dep;
+        }
+    }
+    return best;
+}
+
+OpResult AirportSystem::processNextDeparture() {
+    if (departureQueue_.empty()) return OpResult::failure("Hàng đợi cất cánh trống.");
+    int idx = pickPriorityIndex(departureQueue_);
+    if (idx < 0) return OpResult::failure("Không có chuyến hợp lệ trong hàng đợi.");
+    std::string code = departureQueue_[static_cast<size_t>(idx)];
+    auto f = findFlight(code);
+    if (f->status() != FlightStatus::Ready) {
+        return OpResult::failure("Chuyến " + code + " chưa ở trạng thái Ready (hiện: " +
+                                 f->statusName() + "). Hãy hoàn tất chuẩn bị trước.");
+    }
+    OpResult r1 = advanceFlight(code);  // Ready -> Takeoff
+    OpResult r2 = advanceFlight(code);  // Takeoff -> InAir
+    departureQueue_.erase(departureQueue_.begin() + idx);
+    arrivalQueue_.push_back(code);
+    std::string em = f->emergency() ? " [KHẨN CẤP]" : "";
+    return OpResult::success("Cất cánh chuyến " + code + em + ". " + r1.message + " | " + r2.message +
+                             ". Đã chuyển sang hàng đợi hạ cánh.");
+}
+
+OpResult AirportSystem::processNextArrival() {
+    if (arrivalQueue_.empty()) return OpResult::failure("Hàng đợi hạ cánh trống.");
+    int idx = pickPriorityIndex(arrivalQueue_);
+    if (idx < 0) return OpResult::failure("Không có chuyến hợp lệ trong hàng đợi.");
+    std::string code = arrivalQueue_[static_cast<size_t>(idx)];
+    auto f = findFlight(code);
+    if (f->status() != FlightStatus::InAir) {
+        return OpResult::failure("Chuyến " + code + " chưa ở trạng thái InAir (hiện: " +
+                                 f->statusName() + ").");
+    }
+    advanceFlight(code);  // InAir -> Landed (cộng giờ bay tổ bay)
+    advanceFlight(code);  // Landed -> Turnaround
+    advanceFlight(code);  // Turnaround -> Completed
+    arrivalQueue_.erase(arrivalQueue_.begin() + idx);
+    std::string em = f->emergency() ? " [KHẨN CẤP]" : "";
+    return OpResult::success("Hạ cánh & hoàn tất chuyến " + code + em +
+                             " (trạng thái: " + f->statusName() + ").");
+}
+
+// ===========================================================================
+//  Mô phỏng thời tiết xấu (chức năng mở rộng)
+// ===========================================================================
+int AirportSystem::simulateBadWeather(const std::string& airportCode, const std::string& start,
+                                      const std::string& end, bool cancel) {
+    DateTime ws = DateTime::parse(start);
+    DateTime we = DateTime::parse(end);
+    if (!ws.isValid() || !we.isValid() || we <= ws) return -1;  // tham số sai
+
+    int affected = 0;
+    for (auto& f : flights_) {
+        if (f->isFinished()) continue;
+        bool touches = (f->originCode() == airportCode || f->destCode() == airportCode);
+        if (!touches) continue;
+        // Chuyến bị ảnh hưởng nếu lịch bay giao với khung giờ thời tiết xấu.
+        if (!DateTime::overlaps(f->departure(), f->arrival(), ws, we)) continue;
+        // Đang trên không / đã cất cánh thì không can thiệp.
+        if (f->status() == FlightStatus::InAir || f->status() == FlightStatus::Takeoff) continue;
+
+        std::string reason = "Thời tiết xấu tại " + airportCode;
+        if (cancel) {
+            cancelFlight(f->code(), reason);
+        } else {
+            f->delay(120, reason);  // hoãn 120 phút
+        }
+        ++affected;
+    }
+    if (affected > 0)
+        logEvent("Thời tiết xấu tại " + airportCode + ": " + std::to_string(affected) +
+                 " chuyến bị ảnh hưởng.");
+    return affected;
+}
+
+// ===========================================================================
+//  Lưu / đọc file
+// ===========================================================================
+namespace {
+std::vector<std::string> readLines(const std::string& path) {
+    std::vector<std::string> lines;
+    std::ifstream in(path);
+    if (!in) return lines;
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty()) lines.push_back(line);
+    }
+    return lines;
+}
+std::string dtStore(const DateTime& dt) { return dt.isValid() ? dt.toString() : ""; }
+}  // namespace
+
+OpResult AirportSystem::saveAll(const std::string& dir) {
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) return OpResult::failure("Không tạo được thư mục dữ liệu: " + dir);
+
+    auto open = [&](const std::string& f) { return std::ofstream(dir + "/" + f); };
+
+    // airports / runways / gates
+    {
+        std::ofstream a = open("airports.txt");
+        std::ofstream r = open("runways.txt");
+        std::ofstream g = open("gates.txt");
+        for (auto& ap : airports_) {
+            a << buildRecord({ap->code(), ap->name(), ap->note()}) << "\n";
+            for (auto& rw : ap->runways())
+                r << buildRecord({ap->code(), rw.code(), std::to_string(rw.lengthMeters())}) << "\n";
+            for (auto& ga : ap->gates())
+                g << buildRecord({ap->code(), ga.code(), toString(ga.type())}) << "\n";
+        }
+    }
+    // aircraft
+    {
+        std::ofstream o = open("aircraft.txt");
+        for (auto& ac : aircrafts_)
+            o << buildRecord({toString(ac->category()), ac->registration(), ac->model(),
+                              std::to_string(ac->capacity())}) << "\n";
+    }
+    // pilots
+    {
+        std::ofstream o = open("pilots.txt");
+        for (auto& p : pilots_) {
+            std::ostringstream hours;
+            hours << p->monthlyFlightHours();
+            o << buildRecord({p->id(), p->fullName(), std::to_string(p->age()), p->phone(),
+                              p->baseAirport(), p->certificationList(), hours.str(),
+                              dtStore(p->lastFlightEnd())}) << "\n";
+        }
+    }
+    // ground staff
+    {
+        std::ofstream o = open("groundstaff.txt");
+        for (auto& g : ground_)
+            o << buildRecord({g->id(), g->fullName(), std::to_string(g->age()), g->phone(),
+                              g->baseAirport(), g->department()}) << "\n";
+    }
+    // passengers
+    {
+        std::ofstream o = open("passengers.txt");
+        for (auto& p : passengers_) {
+            std::ostringstream w;
+            w << p->baggage().totalWeightKg();
+            o << buildRecord({p->id(), p->fullName(), std::to_string(p->age()), p->phone(),
+                              p->passport(), p->flightCode(), p->seat(),
+                              p->checkedIn() ? "1" : "0", p->boarded() ? "1" : "0",
+                              std::to_string(p->baggage().pieces()), w.str()}) << "\n";
+        }
+    }
+    // crews
+    {
+        std::ofstream o = open("crews.txt");
+        for (auto& c : crews_) {
+            std::vector<std::string> pids, gids;
+            for (auto& p : c->pilots()) pids.push_back(p->id());
+            for (auto& g : c->groundStaff()) gids.push_back(g->id());
+            o << buildRecord({c->id(), joinList(pids), joinList(gids)}) << "\n";
+        }
+    }
+    // flights
+    {
+        std::ofstream o = open("flights.txt");
+        for (auto& f : flights_) {
+            std::vector<std::string> pids;
+            for (auto& p : f->passengers()) pids.push_back(p->id());
+            o << buildRecord({f->code(), f->originCode(), f->destCode(),
+                              dtStore(f->departure()), dtStore(f->arrival()),
+                              toString(f->status()), f->emergency() ? "1" : "0", f->note(),
+                              f->aircraft() ? f->aircraft()->registration() : "",
+                              f->crew() ? f->crew()->id() : "",
+                              f->gateCode(), joinList(pids)}) << "\n";
+        }
+    }
+    // queues
+    {
+        std::ofstream o = open("queues.txt");
+        o << buildRecord({"DEP", joinList(departureQueue_)}) << "\n";
+        o << buildRecord({"ARR", joinList(arrivalQueue_)}) << "\n";
+    }
+
+    return OpResult::success("Đã lưu toàn bộ dữ liệu vào thư mục '" + dir + "'.");
+}
+
+OpResult AirportSystem::loadAll(const std::string& dir) {
+    if (!fs::exists(dir)) return OpResult::failure("Thư mục dữ liệu không tồn tại: " + dir);
+
+    // Xoá dữ liệu hiện tại.
+    airports_.clear(); aircrafts_.clear(); pilots_.clear(); ground_.clear();
+    passengers_.clear(); crews_.clear(); flights_.clear();
+    departureQueue_.clear(); arrivalQueue_.clear();
+
+    auto path = [&](const std::string& f) { return dir + "/" + f; };
+
+    for (auto& line : readLines(path("airports.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 3) addAirport(r[0], r[1], r[2]);
+    }
+    for (auto& line : readLines(path("runways.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 3) addRunway(r[0], r[1], utils::toInt(r[2]));
+    }
+    for (auto& line : readLines(path("gates.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 3) addGate(r[0], r[1], gateTypeFromString(r[2]));
+    }
+    for (auto& line : readLines(path("aircraft.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 4)
+            addAircraft(aircraftCategoryFromString(r[0]), r[1], r[2], utils::toInt(r[3]));
+    }
+    for (auto& line : readLines(path("pilots.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 8) {
+            addPilot(r[0], r[1], utils::toInt(r[2]), r[3], r[4]);
+            auto p = findPilot(r[0]);
+            if (p) {
+                for (auto& cert : utils::split(r[5], ';')) {
+                    std::string t = utils::trim(cert);
+                    if (!t.empty()) p->addCertification(aircraftCategoryFromString(t));
+                }
+                p->setMonthlyFlightHours(utils::toDouble(r[6]));
+                DateTime last = DateTime::parse(r[7]);
+                if (last.isValid()) p->setLastFlightEnd(last);
+            }
+        }
+    }
+    for (auto& line : readLines(path("groundstaff.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 6) addGroundStaff(r[0], r[1], utils::toInt(r[2]), r[3], r[4], r[5]);
+    }
+    for (auto& line : readLines(path("passengers.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 11) {
+            addPassenger(r[0], r[1], utils::toInt(r[2]), r[3], r[4]);
+            auto p = findPassenger(r[0]);
+            if (p) {
+                p->setFlightCode(r[5]);
+                p->setSeat(r[6]);
+                p->setCheckedIn(utils::toBool(r[7]));
+                p->setBoarded(utils::toBool(r[8]));
+                p->setBaggage(Baggage(utils::toInt(r[9]), utils::toDouble(r[10])));
+            }
+        }
+    }
+    for (auto& line : readLines(path("crews.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 3) {
+            createCrew(r[0]);
+            for (auto& pid : splitList(r[1])) addPilotToCrew(r[0], pid);
+            for (auto& gid : splitList(r[2])) addGroundToCrew(r[0], gid);
+        }
+    }
+    for (auto& line : readLines(path("flights.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 12) {
+            createFlight(r[0], r[1], r[2], r[3], r[4]);
+            auto f = findFlight(r[0]);
+            if (f) {
+                f->setStatus(flightStatusFromString(r[5]));
+                f->setEmergency(utils::toBool(r[6]));
+                f->setNote(r[7]);
+                if (!r[8].empty()) f->setAircraft(findAircraft(r[8]));
+                if (!r[9].empty()) f->setCrew(findCrew(r[9]));
+                f->setGateCode(r[10]);
+                for (auto& pid : splitList(r[11])) {
+                    auto p = findPassenger(pid);
+                    if (p) f->addPassenger(p);
+                }
+            }
+        }
+    }
+    for (auto& line : readLines(path("queues.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 2) {
+            if (r[0] == "DEP") departureQueue_ = splitList(r[1]);
+            else if (r[0] == "ARR") arrivalQueue_ = splitList(r[1]);
+        }
+    }
+
+    rebuildGateReservations();
+    return OpResult::success("Đã đọc dữ liệu từ thư mục '" + dir + "'.");
+}
+
+void AirportSystem::rebuildGateReservations() {
+    for (auto& ap : airports_)
+        for (auto& g : ap->gates()) g.clearReservations();
+
+    for (auto& f : flights_) {
+        if (f->gateCode().empty() || f->isFinished()) continue;
+        Airport* origin = findAirport(f->originCode());
+        if (!origin) continue;
+        Gate* g = origin->findGate(f->gateCode());
+        if (!g) continue;
+        DateTime s, e;
+        gateWindow(*f, s, e);
+        g->reserve(f->code(), s, e);  // bỏ qua nếu trùng (dữ liệu đã nhất quán)
+    }
+}
+
+// ===========================================================================
+//  Dữ liệu mẫu & thống kê
+// ===========================================================================
+void AirportSystem::seedDemoData() {
+    // Khởi tạo đồng hồ mô phỏng: 06:00 — trước 2 chuyến mẫu (08:00/10:00) để
+    // có thể tua tới và quan sát toàn bộ vòng đời.
+    simulationTime_ = DateTime(2026, 6, 10, 6, 0);
+
+    // --- 4 sân bay theo requirements ---
+    addAirport("PHG", "San bay Quoc te Phuong Hoang", "Trung tam, nhieu loai may bay");
+    addRunway("PHG", "PHG-RW1", 3600);
+    addRunway("PHG", "PHG-RW2", 3600);
+    for (int i = 1; i <= 8; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::DoubleJetBridge);
+    for (int i = 9; i <= 15; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::SingleJetBridge);
+
+    addAirport("CLG", "San bay Quoc te Cuu Long", "Than hep va mot so chuyen lon");
+    addRunway("CLG", "CLG-RW1", 2800);
+    addRunway("CLG", "CLG-RW2", 2800);
+    for (int i = 1; i <= 10; ++i) addGate("CLG", "CLG-G" + std::to_string(i), GateType::SingleJetBridge);
+
+    addAirport("HAU", "San bay Dao Hai Au", "Chi may bay nho / canh quat");
+    addRunway("HAU", "HAU-RW1", 1800);
+    for (int i = 1; i <= 3; ++i) addGate("HAU", "HAU-G" + std::to_string(i), GateType::RemoteStand);
+
+    addAirport("MHA", "San bay Thung Lung Muong Hoa", "Vung cao, han che ha tang");
+    addRunway("MHA", "MHA-RW1", 1600);
+    for (int i = 1; i <= 2; ++i) addGate("MHA", "MHA-G" + std::to_string(i), GateType::RemoteStand);
+
+    // --- Máy bay ---
+    addAircraft(AircraftCategory::WideBody, "VN-SKY900", "SkyCruiser-900", 360);
+    addAircraft(AircraftCategory::WideBody, "VN-HRZ350", "Horizon-350", 320);
+    addAircraft(AircraftCategory::NarrowBody, "VN-AERO321", "AeroSwift-321", 200);
+    addAircraft(AircraftCategory::NarrowBody, "VN-CLD200", "CloudJet-200", 180);
+    addAircraft(AircraftCategory::Turboprop, "VN-TER72", "TerraProp-72", 72);
+
+    // --- Phi công ---
+    addPilot("PLT01", "Nguyen Van An", 42, "0900000001", "PHG");
+    addPilotCertification("PLT01", AircraftCategory::WideBody);
+    addPilotCertification("PLT01", AircraftCategory::NarrowBody);
+    addPilot("PLT02", "Tran Thi Binh", 38, "0900000002", "PHG");
+    addPilotCertification("PLT02", AircraftCategory::NarrowBody);
+    addPilot("PLT03", "Le Quang Cuong", 45, "0900000003", "CLG");
+    addPilotCertification("PLT03", AircraftCategory::NarrowBody);
+    addPilotCertification("PLT03", AircraftCategory::Turboprop);
+    addPilot("PLT04", "Pham Gia Dat", 35, "0900000004", "HAU");
+    addPilotCertification("PLT04", AircraftCategory::Turboprop);
+
+    // --- Nhân viên mặt đất ---
+    addGroundStaff("GS01", "Vo Thi En", 29, "0911000001", "PHG", "Check-in");
+    addGroundStaff("GS02", "Do Van Phong", 31, "0911000002", "PHG", "Boarding");
+    addGroundStaff("GS03", "Bui Thi Giang", 27, "0911000003", "CLG", "Baggage");
+
+    // --- Tổ bay ---
+    createCrew("CRW01");
+    addPilotToCrew("CRW01", "PLT01");
+    addPilotToCrew("CRW01", "PLT02");
+    addGroundToCrew("CRW01", "GS01");
+    addGroundToCrew("CRW01", "GS02");
+
+    createCrew("CRW02");
+    addPilotToCrew("CRW02", "PLT03");
+    addGroundToCrew("CRW02", "GS03");
+
+    // --- Hành khách ---
+    addPassenger("PX001", "Hoang Van Hung", 30, "0980000001", "P0001");
+    setPassengerBaggage("PX001", 1, 18.0);
+    addPassenger("PX002", "Ngo Thi Lan", 25, "0980000002", "P0002");
+    setPassengerBaggage("PX002", 3, 55.0);  // vượt mức -> cảnh báo
+    addPassenger("PX003", "Dang Van Minh", 40, "0980000003", "P0003");
+    setPassengerBaggage("PX003", 2, 40.0);
+
+    // --- Chuyến bay mẫu ---
+    createFlight("SG100", "PHG", "CLG", "2026-06-10 08:00", "2026-06-10 09:30");
+    assignAircraft("SG100", "VN-AERO321");
+    assignCrew("SG100", "CRW01");
+    assignGate("SG100", "");  // tự động
+    bookPassenger("SG100", "PX001");
+    bookPassenger("SG100", "PX002");
+
+    createFlight("SG200", "HAU", "PHG", "2026-06-10 10:00", "2026-06-10 11:00");
+    assignAircraft("SG200", "VN-TER72");
+    assignCrew("SG200", "CRW02");
+    assignGate("SG200", "");
+    bookPassenger("SG200", "PX003");
+}
+
+std::string AirportSystem::summary() const {
+    std::ostringstream o;
+    o << "Sân bay: " << airports_.size()
+      << " | Máy bay: " << aircrafts_.size()
+      << " | Phi công: " << pilots_.size()
+      << " | NV mặt đất: " << ground_.size()
+      << " | Hành khách: " << passengers_.size()
+      << " | Tổ bay: " << crews_.size()
+      << " | Chuyến bay: " << flights_.size()
+      << " | Hàng đợi đi/đến: " << departureQueue_.size() << "/" << arrivalQueue_.size();
+    return o.str();
+}
+
+}  // namespace skygate
