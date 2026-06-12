@@ -16,11 +16,11 @@ Dưới đây là một số hình ảnh demo trực quan về giao diện và c
 
 ### Bảng điều khiển chính (Dashboard)
 Giao diện được thiết kế theo phong cách tối giản, sử dụng hiệu ứng kính mờ (Glassmorphism) và hỗ trợ hiển thị tốt trên cả máy tính lẫn điện thoại di động:
-![SkyGate Dashboard](docs/images/dashboard.png)
+![SkyGate Dashboard](docs/images/dashboard_v2.png)
 
 ### Giám sát Sân bay & Cập nhật Thời tiết
 Giám sát trạng thái hoạt động của đường băng, cổng đỗ (gate), phân bổ nhân viên trực ban và cập nhật tình tiết thời tiết trực quan:
-![Airports & Weather Monitor](docs/images/airports.png)
+![Airports & Weather Monitor](docs/images/airports_v2.png)
 
 ### Quản lý Nhân sự & Hành khách
 Bảng dữ liệu phi công, nhân viên mặt đất và danh sách hành khách được cấu trúc thành các cột dọc nhỏ gọn với thanh cuộn độc lập:
