@@ -1,22 +1,7 @@
-// SkyGate Map Web — bọc giao diện giám sát bản đồ bay Việt Nam.
+// SkyGate Web — gọi REST API của backend C++ và render giao diện.
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 let STATE = null;
-
-// Leaflet map instances
-let map = null;
-let airportMarkers = {};
-let flightPaths = [];
-let flightMarkers = {};
-let weatherOverlays = [];
-
-// Tọa độ địa lý của các sân bay tại Việt Nam
-const AIRPORT_COORDS = {
-  PHG: [21.2212, 105.8072],   // Sân bay Quốc tế Phương Hoàng (Hà Nội)
-  CLG: [10.8184, 106.6588],   // Sân bay Quốc tế Cửu Long (TP.HCM)
-  HAU: [10.2244, 103.9608],   // Sân bay Đảo Hải Âu (Phú Quốc)
-  MHA: [22.3364, 103.8438]    // Sân bay Thung Lũng Mường Hoa (Sa Pa)
-};
 
 async function api(path, params) {
   const opt = { method: params ? "POST" : "GET" };
@@ -41,435 +26,6 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-// Helper to parse dates in simulated time format (robust cross-browser parsing)
-function parseSimDate(dateStr) {
-  if (!dateStr) return null;
-  
-  const cleanedStr = dateStr.trim();
-  
-  // Try YYYY/MM/DD HH:MM:SS format first (highly cross-browser compatible)
-  let d = new Date(cleanedStr.replace(/-/g, '/'));
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Try ISO format with T
-  d = new Date(cleanedStr.replace(' ', 'T'));
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Direct new Date
-  d = new Date(dateStr);
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Manual string split fallback
-  const parts = cleanedStr.split(' ');
-  if (parts.length >= 2) {
-    const dateParts = parts[0].split('-');
-    const timeParts = parts[1].split(':');
-    if (dateParts.length === 3 && timeParts.length >= 2) {
-      const year = parseInt(dateParts[0], 10);
-      const month = parseInt(dateParts[1], 10) - 1;
-      const day = parseInt(dateParts[2], 10);
-      const hour = parseInt(timeParts[0], 10);
-      const minute = parseInt(timeParts[1], 10);
-      const second = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
-      const parsedDate = new Date(year, month, day, hour, minute, second);
-      if (parsedDate && !isNaN(parsedDate.getTime())) return parsedDate;
-    }
-  }
-  return null;
-}
-
-// Calculate flight progress fraction between 0.0 and 1.0 (safeguarded against NaN)
-function getFlightProgress(flight, currentTimeStr) {
-  const dep = parseSimDate(flight.departure);
-  const arr = parseSimDate(flight.arrival);
-  const now = parseSimDate(currentTimeStr);
-  
-  if (!dep || !arr || !now) return 0;
-  if (isNaN(dep.getTime()) || isNaN(arr.getTime()) || isNaN(now.getTime())) return 0;
-  
-  if (now <= dep) return 0;
-  if (now >= arr) return 1;
-  
-  const total = arr.getTime() - dep.getTime();
-  const elapsed = now.getTime() - dep.getTime();
-  
-  if (isNaN(total) || isNaN(elapsed) || total <= 0) return 0;
-  
-  return Math.min(1, Math.max(0, elapsed / total));
-}
-
-// Generate quadratic Bezier points for curved lines
-function getBezierPoints(p1, p2, offset = 0.15) {
-  const midX = (p1[0] + p2[0]) / 2;
-  const midY = (p1[1] + p2[1]) / 2;
-  const dx = p2[0] - p1[0];
-  const dy = p2[1] - p1[1];
-  
-  // Perpendicular control point
-  const controlX = midX - dy * offset;
-  const controlY = midY + dx * offset;
-  
-  const points = [];
-  const steps = 30;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = (1-t)*(1-t)*p1[0] + 2*(1-t)*t*controlX + t*t*p2[0];
-    const y = (1-t)*(1-t)*p1[1] + 2*(1-t)*t*controlY + t*t*p2[1];
-    points.push([x, y]);
-  }
-  return points;
-}
-
-function initMap() {
-  // Center map on Central Vietnam
-  map = L.map('map', {
-    zoomControl: true,
-    maxZoom: 12,
-    minZoom: 4
-  }).setView([16.4, 106.5], 5.5);
-
-  // CartoDB Dark Matter map layer (very sleek dark theme)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CartoDB</a>',
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
-}
-
-function updateMap() {
-  if (!map || !STATE) return;
-
-  // Clear previous flights lines
-  flightPaths.forEach(p => map.removeLayer(p));
-  flightPaths = [];
-
-  // Clear previous weather overlays
-  weatherOverlays.forEach(o => map.removeLayer(o));
-  weatherOverlays = [];
-
-  // Track active flights in the air
-  const activeFlightCodes = new Set();
-
-  // Update or render Airports
-  STATE.airports.forEach(ap => {
-    const coords = AIRPORT_COORDS[ap.code];
-    if (!coords) return;
-
-    let weatherBad = false;
-    let emergency = false;
-
-    // Check bad weather state via notes
-    if (ap.note && ap.note !== "Thời tiết tốt" && ap.note !== "Bình thường" && ap.note !== "") {
-      weatherBad = true;
-    }
-
-    // Check emergency flights targeting this airport
-    const activeEmergencies = STATE.flights.filter(f => 
-      (f.origin === ap.code || f.dest === ap.code) && 
-      f.emergency && 
-      f.status !== "Completed" && 
-      f.status !== "Landed" && 
-      f.status !== "Cancelled"
-    );
-    if (activeEmergencies.length > 0) {
-      emergency = true;
-    }
-
-    let marker = airportMarkers[ap.code];
-    if (!marker) {
-      const icon = L.divIcon({
-        className: 'airport-marker-container',
-        html: `<div class="airport-marker ${emergency ? 'emergency' : (weatherBad ? 'weather-bad' : '')}" id="marker-${ap.code}">
-                <div class="airport-pulse"></div>
-                <div class="airport-dot"></div>
-                <div class="airport-label">${ap.code}</div>
-               </div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
-      });
-
-      marker = L.marker(coords, { icon }).addTo(map);
-      airportMarkers[ap.code] = marker;
-    } else {
-      const el = document.getElementById(`marker-${ap.code}`);
-      if (el) {
-        el.className = `airport-marker ${emergency ? 'emergency' : (weatherBad ? 'weather-bad' : '')}`;
-      }
-    }
-
-    // Render Windy-style weather radar sweep overlay if weather is bad
-    if (weatherBad) {
-      const isSevere = ap.note.toLowerCase().includes('bão') || 
-                       ap.note.toLowerCase().includes('đóng cửa') || 
-                       ap.note.toLowerCase().includes('huỷ') || 
-                       ap.note.toLowerCase().includes('khẩn');
-      
-      const weatherOverlayHtml = `
-        <div class="radar-sweep-container" style="pointer-events:none;">
-          <div class="weather-storm-cell ${isSevere ? 'severe' : ''}"></div>
-          <div class="radar-sweep"></div>
-          <div class="weather-icon-badge ${isSevere ? 'severe' : ''}">
-            <i data-lucide="${isSevere ? 'cloud-lightning' : 'cloud-rain'}"></i>
-          </div>
-        </div>
-      `;
-      
-      const weatherIcon = L.divIcon({
-        className: 'weather-radar-overlay',
-        html: weatherOverlayHtml,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0]
-      });
-      
-      const wOverlay = L.marker(coords, { icon: weatherIcon }).addTo(map);
-      weatherOverlays.push(wOverlay);
-    }
-
-    // Bind popup with airport details
-    const popupHtml = `
-      <div style="font-size:12px; line-height:1.4; min-width: 180px;">
-        <h3 style="margin:0 0 6px 0; color:var(--accent); font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px;">
-          <i data-lucide="building-2" style="width:14px; height:14px;"></i> ${ap.code} — ${ap.name}
-        </h3>
-        <p style="margin:2px 0;"><b>Tình trạng:</b> <span style="color:${emergency ? 'var(--red)' : (weatherBad ? 'var(--amber)' : 'var(--green)')}; font-weight:600;">${esc(ap.note || "Bình thường")}</span></p>
-        <p style="margin:2px 0;"><b>Đường băng dài nhất:</b> ${ap.longestRunway}m</p>
-        <p style="margin:2px 0;"><b>Đường băng:</b> ${ap.runways.map(r => r.code).join(', ')}</p>
-        <p style="margin:2px 0;"><b>Cổng đỗ:</b> ${ap.gates.length} cổng</p>
-      </div>
-    `;
-    marker.bindPopup(popupHtml);
-
-    // On click, switch to Airport tab and scroll to card
-    marker.off('click');
-    marker.on('click', () => {
-      const tabBtn = document.querySelector('.tab[data-tab="airports"]');
-      if (tabBtn) {
-        tabBtn.click();
-        setTimeout(() => {
-          const cards = document.querySelectorAll('#airports-list .card');
-          for (const card of cards) {
-            if (card.innerHTML.includes(ap.code)) {
-              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              card.style.borderColor = 'var(--accent)';
-              setTimeout(() => card.style.borderColor = '', 2000);
-              break;
-            }
-          }
-        }, 150);
-      }
-    });
-  });
-
-  // Render Flights and Moving Plane Markers
-  STATE.flights.forEach(f => {
-    if (f.status === "Cancelled" || f.status === "Landed" || f.status === "Completed") return;
-
-    const startCoords = AIRPORT_COORDS[f.origin];
-    const endCoords = AIRPORT_COORDS[f.dest];
-    if (!startCoords || !endCoords) return;
-
-    // Create curved flight path
-    const codeHash = [...f.code].reduce((a, c) => a + c.charCodeAt(0), 0);
-    const curvature = 0.12 + (codeHash % 8) * 0.02; // Curved differently to avoid overlays
-    const points = getBezierPoints(startCoords, endCoords, curvature);
-
-    const isFlying = f.status === "Takeoff" || f.status === "InAir";
-    const pathColor = f.emergency ? 'var(--red)' : 'var(--accent)';
-
-    // Polyline glow and main line
-    const flightPath = L.polyline(points, {
-      color: pathColor,
-      weight: isFlying ? 2.5 : 1.5,
-      opacity: isFlying ? 0.8 : 0.35,
-      dashArray: isFlying ? '' : '6, 6'
-    }).addTo(map);
-    flightPaths.push(flightPath);
-
-    // Add popup info on line
-    const popupHtml = `
-      <div style="font-size:12px; line-height:1.4;">
-        <h3 style="margin:0 0 6px 0; color:${f.emergency ? 'var(--red)' : 'var(--accent)'}; font-size:13px; font-weight:700;">Chuyến ${f.code}</h3>
-        <p style="margin:2px 0;"><b>Tuyến:</b> ${f.origin} &rarr; ${f.dest}</p>
-        <p style="margin:2px 0;"><b>Trạng thái:</b> <span class="${statusClass(f.status)}">${f.status}</span></p>
-        <p style="margin:2px 0;"><b>Khởi hành:</b> ${f.departure || '—'}</p>
-        <p style="margin:2px 0;"><b>Dự kiến đến:</b> ${f.arrival || '—'}</p>
-        ${f.note ? `<p style="margin:2px 0; color:var(--red);"><b>Chú ý:</b> ${esc(f.note)}</p>` : ''}
-      </div>
-    `;
-    flightPath.bindPopup(popupHtml);
-
-    flightPath.on('mouseover', () => {
-      flightPath.setStyle({ weight: 4, opacity: 1 });
-    });
-    flightPath.on('mouseout', () => {
-      flightPath.setStyle({ weight: isFlying ? 2.5 : 1.5, opacity: isFlying ? 0.8 : 0.35 });
-    });
-
-    // If flight is currently in the air, compute and animate its position
-    if (isFlying) {
-      activeFlightCodes.add(f.code);
-      const targetProgress = getFlightProgress(f, STATE.currentTime);
-      const planeColor = f.emergency ? 'var(--red)' : 'var(--accent)';
-      const planeStroke = '#ffffff';
-
-      let planeMarker = flightMarkers[f.code];
-      
-      if (!planeMarker) {
-        // Create marker initially at progress 0 or targetProgress (glide out of origin)
-        const startProgress = 0;
-        const initialPos = points[0];
-
-        const planeIconHtml = `
-          <div class="plane-icon-wrapper" style="transform: rotate(0deg);">
-            <svg class="plane-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="${planeColor}" stroke="${planeStroke}" stroke-width="1.2">
-              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5l8 2.5z"/>
-            </svg>
-            <div class="plane-label">${f.code}</div>
-          </div>
-        `;
-
-        const planeIcon = L.divIcon({
-          className: 'plane-marker-icon',
-          html: planeIconHtml,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
-
-        planeMarker = L.marker(initialPos, { icon: planeIcon }).addTo(map);
-        planeMarker.displayedProgress = startProgress;
-        flightMarkers[f.code] = planeMarker;
-
-        // On click, switch to Flight tab and scroll to flight card
-        planeMarker.on('click', () => {
-          const tabBtn = document.querySelector('.tab[data-tab="flights"]');
-          if (tabBtn) {
-            tabBtn.click();
-            setTimeout(() => {
-              const cards = document.querySelectorAll('#flights-list .card');
-              for (const card of cards) {
-                if (card.innerHTML.includes(f.code)) {
-                  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  card.style.borderColor = 'var(--accent)';
-                  setTimeout(() => card.style.borderColor = '', 2000);
-                  break;
-                }
-              }
-            }, 150);
-          }
-        });
-      }
-
-      planeMarker.bindPopup(popupHtml);
-
-      // Cancel previous animation frame if still running
-      if (planeMarker.animationFrameId) {
-        cancelAnimationFrame(planeMarker.animationFrameId);
-      }
-
-      // Animate marker from current displayedProgress to targetProgress (safeguarded against NaN)
-      let startProgress = planeMarker.displayedProgress || 0;
-      if (isNaN(startProgress)) startProgress = 0;
-      let finalTargetProgress = targetProgress || 0;
-      if (isNaN(finalTargetProgress)) finalTargetProgress = 0;
-      
-      // If target progress is behind current displayed progress (simulation reset or rewind)
-      if (finalTargetProgress < startProgress) {
-        startProgress = finalTargetProgress;
-        planeMarker.displayedProgress = finalTargetProgress;
-      }
-
-      const progressDiff = finalTargetProgress - startProgress;
-      const animDuration = 1500; // Animate over 1.5 seconds
-      const startTime = performance.now();
-
-      function animatePlane(nowTime) {
-        const elapsed = nowTime - startTime;
-        const t = Math.min(1, elapsed / animDuration);
-        
-        // Glide along path linearly
-        let currentProgress = startProgress + progressDiff * t;
-        if (isNaN(currentProgress)) currentProgress = finalTargetProgress;
-        planeMarker.displayedProgress = currentProgress;
-
-        const idx = Math.floor(currentProgress * (points.length - 1));
-        const currentPos = points[idx];
-
-        // Rotation angle
-        const nextIdx = Math.min(idx + 1, points.length - 1);
-        const prevIdx = Math.max(idx - 1, 0);
-        const p1 = points[prevIdx];
-        const p2 = points[nextIdx];
-
-        const pixel1 = map.project(p1, map.getZoom());
-        const pixel2 = map.project(p2, map.getZoom());
-        const dx = pixel2.x - pixel1.x;
-        const dy = pixel2.y - pixel1.y;
-        let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-
-        // Set marker position
-        planeMarker.setLatLng(currentPos);
-
-        // Update rotation transform
-        const iconEl = planeMarker.getElement();
-        if (iconEl) {
-          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
-          if (wrapper) {
-            wrapper.style.transform = `rotate(${angle}deg)`;
-          }
-        }
-
-        if (t < 1) {
-          planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
-        } else {
-          planeMarker.animationFrameId = null;
-        }
-      }
-
-      if (progressDiff > 0.0001) {
-        planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
-      } else {
-        // Direct update if no difference
-        let safeTargetProgress = targetProgress || 0;
-        if (isNaN(safeTargetProgress)) safeTargetProgress = 0;
-        const idx = Math.floor(safeTargetProgress * (points.length - 1));
-        const currentPos = points[idx];
-        if (currentPos) planeMarker.setLatLng(currentPos);
-
-        const nextIdx = Math.min(idx + 1, points.length - 1);
-        const prevIdx = Math.max(idx - 1, 0);
-        const p1 = points[prevIdx];
-        const p2 = points[nextIdx];
-
-        const pixel1 = map.project(p1, map.getZoom());
-        const pixel2 = map.project(p2, map.getZoom());
-        let angle = Math.atan2(pixel2.y - pixel1.y, pixel2.x - pixel1.x) * 180 / Math.PI + 90;
-
-        const iconEl = planeMarker.getElement();
-        if (iconEl) {
-          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
-          if (wrapper) {
-            wrapper.style.transform = `rotate(${angle}deg)`;
-          }
-        }
-      }
-    }
-  });
-
-  // Cleanup of inactive flights
-  for (const code in flightMarkers) {
-    if (!activeFlightCodes.has(code)) {
-      const marker = flightMarkers[code];
-      if (marker.animationFrameId) {
-        cancelAnimationFrame(marker.animationFrameId);
-      }
-      map.removeLayer(marker);
-      delete flightMarkers[code];
-    }
-  }
-
-  lucide.createIcons();
-}
-
 async function load() {
   STATE = await api("/api/state");
   
@@ -488,13 +44,10 @@ async function load() {
   renderPeople();
   initWeatherForm();
 
-  // Simulated Clock & Event Logs
+  // Đồng hồ mô phỏng + nhật ký + form tạo chuyến
   if (STATE.currentTime) $("#sim-now").textContent = STATE.currentTime;
   renderLog();
   initCreateForm();
-
-  // Render Map elements (Airports, flight routes, active planes)
-  updateMap();
 
   // Initialize Lucide Icons for dynamic content
   lucide.createIcons();
@@ -513,14 +66,14 @@ function getTimelineHtml(status) {
   }
   
   const stages = [
-    { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn', 'Check-in'] },
+    { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn'] },
     { id: 'bd', label: 'Lên máy bay', matches: ['Boarding'] },
     { id: 'ia', label: 'Đang bay', matches: ['Takeoff', 'InAir'] },
     { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Completed'] }
   ];
   
   let currentIdx = -1;
-  if (['Scheduled', 'Delayed', 'CheckIn', 'Check-in'].includes(status)) currentIdx = 0;
+  if (['Scheduled', 'Delayed', 'CheckIn'].includes(status)) currentIdx = 0;
   else if (status === 'Boarding') currentIdx = 1;
   else if (['Takeoff', 'InAir'].includes(status)) currentIdx = 2;
   else if (['Landed', 'Completed'].includes(status)) currentIdx = 3;
@@ -553,6 +106,7 @@ function renderFlights() {
   
   box.innerHTML = STATE.flights.map((f) => {
     const isEmer = f.emergency;
+    const isDelay = f.status === "Delayed";
     return `
     <div class="card">
       <h3>
@@ -751,7 +305,6 @@ function openModal(code) {
   
   $("#modal-title").innerHTML = `<i data-lucide="settings" style="display:inline-block; vertical-align:middle; margin-right:6px;"></i> Chuyến ${f.code} — ${f.status}`;
   
-  const canCheckIn = f.status === "CheckIn" || f.status === "Check-in" || f.status === "Boarding";
   const pax = f.passengers.map((pid) => {
     const p = STATE.passengers.find((x) => x.id === pid);
     const name = p ? p.name : pid;
@@ -760,14 +313,11 @@ function openModal(code) {
     if (p && p.boarded) { stText = "Đã lên máy bay"; statusClass = "completed"; }
     else if (p && p.checkedIn) { stText = `Đã check-in (Ghế ${p.seat})`; statusClass = "boarding"; }
     
-    const isBtnDisabled = !canCheckIn || (p && p.checkedIn);
-    const btnTitle = !canCheckIn ? "Chỉ có thể check-in khi trạng thái chuyến bay là Check-in hoặc Boarding" : "";
-    
     return `
       <div class="pax-line">
         <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:1px 5px;">${stText}</span>)</small></span>
         <span class="pax-actions">
-          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${isBtnDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} title="${esc(btnTitle)}">
+          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${p && p.checkedIn ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
             <i data-lucide="check-square"></i> Check-in
           </button>
           <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${p && (!p.checkedIn || p.boarded) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
@@ -806,6 +356,7 @@ function closeModal() {
 
 // Show seat selector grid in modal
 function showSeatPicker(code, pid) {
+  // Find seats occupied by passengers of this flight
   const occupied = STATE.passengers
     .filter(p => p.flight === code && p.seat)
     .map(p => p.seat.toUpperCase());
@@ -863,7 +414,7 @@ async function selectSeat(code, pid, seatCode) {
   const r = await api("/api/flight/checkin", { code, pid, seat: seatCode });
   toast(r.message, !r.ok);
   await load();
-  openModal(code);
+  openModal(code); // Refresh modal view
 }
 
 async function doBoard(code, pid) {
@@ -888,14 +439,17 @@ async function doCancel(code) {
 }
 
 // ---------- Nhật ký sự kiện ----------
+
+// Classify a log entry text into a category for filtering & styling.
 function classifyLog(text) {
   if (/→/.test(text) && /:/.test(text) && !/Tạo chuyến|gán |đặt chỗ/.test(text))
-    return "status";
+    return "status";        // e.g. "SG100: Scheduled → Check-in"
   if (/Tua thời gian|Tua th/.test(text))
-    return "tick";
-  return "assign";
+    return "tick";           // time advance
+  return "assign";           // creation, assignment, etc.
 }
 
+// Icon + color per category
 const LOG_STYLE = {
   status: { icon: "git-commit-horizontal", color: "var(--accent)" },
   tick:   { icon: "timer",                 color: "var(--muted)" },
@@ -913,6 +467,7 @@ function renderLog() {
     return;
   }
 
+  // Classify & filter
   const items = STATE.eventLog
     .map((e) => ({ ...e, cat: classifyLog(e.text) }))
     .filter((e) => logFilter === "all" || e.cat === logFilter);
@@ -922,9 +477,11 @@ function renderLog() {
     return;
   }
 
+  // Build timeline HTML
   let html = '<div class="log-timeline">';
   items.forEach((e) => {
     const st = LOG_STYLE[e.cat] || LOG_STYLE.assign;
+    // Extract just the time portion (HH:MM) for compact display
     const timeParts = e.time.split(" ");
     const day = timeParts[0] || "";
     const hour = timeParts[1] || "";
@@ -977,12 +534,12 @@ async function doCreateFlight() {
     departure: $("#c-dep").value.replace("T", " "),
     arrival: $("#c-arr").value.replace("T", " "),
   });
-  if (!r.ok) { toast(r.message, true); return; }
+  if (!r.ok) { toast(r.message, true); return; }  // tạo thất bại -> dừng
 
   const msgs = [r.message];
   const reg = $("#c-aircraft").value;
   const crewId = $("#c-crew").value;
-  
+  // Backend yêu cầu có máy bay trước khi gán tổ bay & gate.
   if (reg) msgs.push((await api("/api/flight/assign-aircraft", { code, reg })).message);
   if (reg && crewId) msgs.push((await api("/api/flight/assign-crew", { code, crewId })).message);
   if (reg) msgs.push((await api("/api/flight/assign-gate", { code, gate: $("#c-gate").value })).message);
@@ -1017,7 +574,7 @@ function stopPlay() {
 
 function togglePlay() {
   if (simTimer) { stopPlay(); return; }
-  simTimer = setInterval(doTick, 2000); // Step every 2 seconds real-time
+  simTimer = setInterval(doTick, 2000);  // 2 giây thật / bước
   setPlayLabel(true);
 }
 
@@ -1032,9 +589,7 @@ function initTabs() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  initMap();
   initTabs();
-  
   $("#btn-reload").addEventListener("click", load);
   $("#modal-close").addEventListener("click", closeModal);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
@@ -1060,10 +615,12 @@ window.addEventListener("DOMContentLoaded", () => {
     await load();
   });
 
+  // Đồng hồ mô phỏng + tạo chuyến
   $("#btn-step").addEventListener("click", doTick);
   $("#btn-play").addEventListener("click", togglePlay);
   $("#btn-create").addEventListener("click", doCreateFlight);
 
+  // Log filter buttons
   $$(".log-filter").forEach((btn) => btn.addEventListener("click", () => {
     $$(".log-filter").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");

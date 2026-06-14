@@ -3,16 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SkyGate — Airport Management</title>
+  <title>SkyGate Map — Airport Management</title>
+  
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Custom Style Sheet -->
   <link rel="stylesheet" href="style.css" />
+  
   <!-- Lucide SVG Icons Library -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Leaflet JS for Map -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <i data-lucide="plane-takeoff"></i>
-      SkyGate <span>Airport Management</span>
+      SkyGate Map <span>Airport &amp; Flight Monitor</span>
     </div>
     <div class="actions">
       <button id="btn-reload" class="btn">
@@ -65,163 +74,173 @@
     </button>
   </nav>
 
-  <main>
-    <!-- TAB: Chuyến bay -->
-    <section id="tab-flights" class="panel active">
-      <h2><i data-lucide="calendar"></i> Chuyến bay hiện tại</h2>
-      <div id="flights-list" class="cards"></div>
-    </section>
-
-    <!-- TAB: Sân bay -->
-    <section id="tab-airports" class="panel">
-      <h2><i data-lucide="map-pin"></i> Sân bay · Đường băng · Cổng</h2>
-      <div id="airports-list" class="cards"></div>
-    </section>
-
-    <!-- TAB: Máy bay -->
-    <section id="tab-aircrafts" class="panel">
-      <h2><i data-lucide="shield"></i> Đội máy bay khả dụng</h2>
-      <div class="table-container">
-        <table class="grid" id="aircrafts-table">
-          <thead>
-            <tr>
-              <th>Đăng ký</th>
-              <th>Model</th>
-              <th>Loại</th>
-              <th>Sức chứa</th>
-              <th>Runway tối thiểu</th>
-              <th>Quay đầu</th>
-              <th>Gate ưu tiên</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+  <!-- Bố cục Dashboard chia đôi: Trái hiển thị bản đồ bay Việt Nam, Phải hiển thị các panel điều khiển -->
+  <div class="dashboard-layout">
+    <div class="map-wrapper">
+      <div class="map-header">
+        <i data-lucide="map"></i> BẢN ĐỒ ĐƯỜNG BAY VIỆT NAM (LIVE FLIGHT TRACKER)
       </div>
-    </section>
+      <div id="map"></div>
+    </div>
+    
+    <main>
+      <!-- TAB: Chuyến bay -->
+      <section id="tab-flights" class="panel active">
+        <h2><i data-lucide="calendar"></i> Chuyến bay hiện tại</h2>
+        <div id="flights-list" class="cards"></div>
+      </section>
 
-    <!-- TAB: Nhân sự + hành khách -->
-    <section id="tab-people" class="panel">
-      <div class="people-grid">
-        <!-- Cột 1: Phi công -->
-        <div class="people-col">
-          <h2><i data-lucide="award"></i> Đội ngũ phi công</h2>
-          <div class="table-container people-scroll">
-            <table class="grid" id="pilots-table">
-              <thead>
-                <tr>
-                  <th>Mã</th>
-                  <th>Tên</th>
-                  <th>Tuổi</th>
-                  <th>Base</th>
-                  <th>Chứng chỉ</th>
-                  <th>Giờ bay/tháng</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+      <!-- TAB: Sân bay -->
+      <section id="tab-airports" class="panel">
+        <h2><i data-lucide="map-pin"></i> Sân bay · Đường băng · Cổng</h2>
+        <div id="airports-list" class="cards"></div>
+      </section>
+
+      <!-- TAB: Máy bay -->
+      <section id="tab-aircrafts" class="panel">
+        <h2><i data-lucide="shield"></i> Đội máy bay khả dụng</h2>
+        <div class="table-container">
+          <table class="grid" id="aircrafts-table">
+            <thead>
+              <tr>
+                <th>Đăng ký</th>
+                <th>Model</th>
+                <th>Loại</th>
+                <th>Sức chứa</th>
+                <th>Runway tối thiểu</th>
+                <th>Quay đầu</th>
+                <th>Gate ưu tiên</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: Nhân sự + hành khách -->
+      <section id="tab-people" class="panel">
+        <div class="people-grid">
+          <!-- Cột 1: Phi công -->
+          <div class="people-col">
+            <h2><i data-lucide="award"></i> Phi công</h2>
+            <div class="table-container people-scroll">
+              <table class="grid" id="pilots-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Tên</th>
+                    <th>Tuổi</th>
+                    <th>Base</th>
+                    <th>Chứng chỉ</th>
+                    <th>Giờ bay/tháng</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột 2: Nhân viên mặt đất -->
+          <div class="people-col">
+            <h2><i data-lucide="contact"></i> Ground Staff</h2>
+            <div class="table-container people-scroll">
+              <table class="grid" id="ground-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Tên</th>
+                    <th>Base</th>
+                    <th>Bộ phận</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Cột 3: Hành khách -->
+          <div class="people-col">
+            <h2><i data-lucide="user-check"></i> Hành khách</h2>
+            <div class="table-container people-scroll">
+              <table class="grid" id="passengers-table">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Tên</th>
+                    <th>Hộ chiếu</th>
+                    <th>Chuyến</th>
+                    <th>Ghế</th>
+                    <th>Check-in</th>
+                    <th>Boarded</th>
+                    <th>Hành lý</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
+      </section>
 
-        <!-- Cột 2: Nhân viên mặt đất -->
-        <div class="people-col">
-          <h2><i data-lucide="contact"></i> Nhân viên mặt đất</h2>
-          <div class="table-container people-scroll">
-            <table class="grid" id="ground-table">
-              <thead>
-                <tr>
-                  <th>Mã</th>
-                  <th>Tên</th>
-                  <th>Base</th>
-                  <th>Bộ phận</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
+      <!-- TAB: Thời tiết -->
+      <section id="tab-weather" class="panel">
+        <h2><i data-lucide="cloud-lightning"></i> Mô phỏng thời tiết xấu</h2>
+        <p class="hint">Áp dụng thời tiết xấu sẽ tự động hoãn hoặc hủy các chuyến đi/đến một sân bay trong khung giờ được thiết lập.</p>
+        <div class="form">
+          <label>
+            Sân bay bị ảnh hưởng
+            <select id="w-airport"></select>
+          </label>
+          <label>
+            Từ thời điểm
+            <input type="datetime-local" id="w-start" />
+          </label>
+          <label>
+            Đến thời điểm
+            <input type="datetime-local" id="w-end" />
+          </label>
+          <label class="chk">
+            <input type="checkbox" id="w-cancel" /> Huỷ chuyến bay (thay vì chỉ hoãn)
+          </label>
+          <button id="btn-weather" class="btn btn-warn">
+            <i data-lucide="activity"></i> Áp dụng thời tiết
+          </button>
         </div>
+      </section>
 
-        <!-- Cột 3: Hành khách -->
-        <div class="people-col">
-          <h2><i data-lucide="user-check"></i> Danh sách hành khách</h2>
-          <div class="table-container people-scroll">
-            <table class="grid" id="passengers-table">
-              <thead>
-                <tr>
-                  <th>Mã</th>
-                  <th>Tên</th>
-                  <th>Hộ chiếu</th>
-                  <th>Chuyến</th>
-                  <th>Ghế</th>
-                  <th>Check-in</th>
-                  <th>Boarded</th>
-                  <th>Hành lý</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
+      <!-- TAB: Tạo chuyến bay -->
+      <section id="tab-create" class="panel">
+        <h2><i data-lucide="plus-circle"></i> Tạo chuyến bay mới</h2>
+        <p class="hint">Tạo chuyến rồi gán máy bay / tổ bay / gate và đặt chỗ hành khách — tất cả trong một bước.</p>
+        <div class="form">
+          <label>Mã chuyến <input type="text" id="c-code" placeholder="VD: SG300" /></label>
+          <label>Sân bay đi <select id="c-origin"></select></label>
+          <label>Sân bay đến <select id="c-dest"></select></label>
+          <label>Giờ đi <input type="datetime-local" id="c-dep" /></label>
+          <label>Giờ đến <input type="datetime-local" id="c-arr" /></label>
+          <label>Máy bay (tuỳ chọn) <select id="c-aircraft"></select></label>
+          <label>Tổ bay (tuỳ chọn) <select id="c-crew"></select></label>
+          <label>Gate <select id="c-gate"></select></label>
+          <label>Hành khách (giữ Ctrl để chọn nhiều)
+            <select id="c-pax" multiple size="5"></select></label>
+          <button id="btn-create" class="btn"><i data-lucide="check"></i> Tạo chuyến</button>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- TAB: Thời tiết -->
-    <section id="tab-weather" class="panel">
-      <h2><i data-lucide="cloud-lightning"></i> Mô phỏng thời tiết xấu</h2>
-      <p class="hint">Áp dụng thời tiết xấu sẽ tự động hoãn hoặc hủy các chuyến đi/đến một sân bay trong khung giờ được thiết lập.</p>
-      <div class="form">
-        <label>
-          Sân bay bị ảnh hưởng
-          <select id="w-airport"></select>
-        </label>
-        <label>
-          Từ thời điểm
-          <input type="datetime-local" id="w-start" />
-        </label>
-        <label>
-          Đến thời điểm
-          <input type="datetime-local" id="w-end" />
-        </label>
-        <label class="chk">
-          <input type="checkbox" id="w-cancel" /> Huỷ chuyến bay (thay vì chỉ hoãn)
-        </label>
-        <button id="btn-weather" class="btn btn-warn">
-          <i data-lucide="activity"></i> Áp dụng thời tiết
-        </button>
-      </div>
-    </section>
-
-    <!-- TAB: Tạo chuyến bay -->
-    <section id="tab-create" class="panel">
-      <h2><i data-lucide="plus-circle"></i> Tạo chuyến bay mới</h2>
-      <p class="hint">Tạo chuyến rồi gán máy bay / tổ bay / gate và đặt chỗ hành khách — tất cả trong một bước. Các mục tài nguyên là tuỳ chọn (có thể bổ sung sau).</p>
-      <div class="form">
-        <label>Mã chuyến <input type="text" id="c-code" placeholder="VD: SG300" /></label>
-        <label>Sân bay đi <select id="c-origin"></select></label>
-        <label>Sân bay đến <select id="c-dest"></select></label>
-        <label>Giờ đi <input type="datetime-local" id="c-dep" /></label>
-        <label>Giờ đến <input type="datetime-local" id="c-arr" /></label>
-        <label>Máy bay (tuỳ chọn) <select id="c-aircraft"></select></label>
-        <label>Tổ bay (tuỳ chọn) <select id="c-crew"></select></label>
-        <label>Gate <select id="c-gate"></select></label>
-        <label>Hành khách (giữ Ctrl để chọn nhiều)
-          <select id="c-pax" multiple size="5"></select></label>
-        <button id="btn-create" class="btn"><i data-lucide="check"></i> Tạo chuyến</button>
-      </div>
-    </section>
-
-    <!-- TAB: Nhật ký sự kiện -->
-    <section id="tab-log" class="panel">
-      <h2><i data-lucide="scroll-text"></i> Nhật ký sự kiện</h2>
-      <p class="hint">Dòng thời gian các sự kiện trong hệ thống — mới nhất ở trên cùng.</p>
-      <div class="log-filters">
-        <button class="log-filter active" data-filter="all">Tất cả</button>
-        <button class="log-filter" data-filter="status">Trạng thái</button>
-        <button class="log-filter" data-filter="tick">Tua giờ</button>
-        <button class="log-filter" data-filter="assign">Gán / Tạo</button>
-      </div>
-      <div id="log-list" class="log-timeline-wrap"></div>
-    </section>
-  </main>
+      <!-- TAB: Nhật ký sự kiện -->
+      <section id="tab-log" class="panel">
+        <h2><i data-lucide="scroll-text"></i> Nhật ký sự kiện</h2>
+        <p class="hint">Dòng thời gian các sự kiện trong hệ thống — mới nhất ở trên cùng.</p>
+        <div class="log-filters">
+          <button class="log-filter active" data-filter="all">Tất cả</button>
+          <button class="log-filter" data-filter="status">Trạng thái</button>
+          <button class="log-filter" data-filter="tick">Tua giờ</button>
+          <button class="log-filter" data-filter="assign">Gán / Tạo</button>
+        </div>
+        <div id="log-list" class="log-timeline-wrap"></div>
+      </section>
+    </main>
+  </div>
 
   <!-- Modal thao tác chuyến bay -->
   <div id="modal" class="modal hidden">
