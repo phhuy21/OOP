@@ -40,24 +40,61 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-// Helper to parse dates in simulated time format
+// Helper to parse dates in simulated time format (robust cross-browser parsing)
 function parseSimDate(dateStr) {
   if (!dateStr) return null;
-  const isoStr = dateStr.trim().replace(' ', 'T');
-  return new Date(isoStr);
+  
+  const cleanedStr = dateStr.trim();
+  
+  // Try YYYY/MM/DD HH:MM:SS format first (highly cross-browser compatible)
+  let d = new Date(cleanedStr.replace(/-/g, '/'));
+  if (d && !isNaN(d.getTime())) return d;
+  
+  // Try ISO format with T
+  d = new Date(cleanedStr.replace(' ', 'T'));
+  if (d && !isNaN(d.getTime())) return d;
+  
+  // Direct new Date
+  d = new Date(dateStr);
+  if (d && !isNaN(d.getTime())) return d;
+  
+  // Manual string split fallback
+  const parts = cleanedStr.split(' ');
+  if (parts.length >= 2) {
+    const dateParts = parts[0].split('-');
+    const timeParts = parts[1].split(':');
+    if (dateParts.length === 3 && timeParts.length >= 2) {
+      const year = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1;
+      const day = parseInt(dateParts[2], 10);
+      const hour = parseInt(timeParts[0], 10);
+      const minute = parseInt(timeParts[1], 10);
+      const second = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
+      const parsedDate = new Date(year, month, day, hour, minute, second);
+      if (parsedDate && !isNaN(parsedDate.getTime())) return parsedDate;
+    }
+  }
+  return null;
 }
 
-// Calculate flight progress fraction between 0.0 and 1.0
+// Calculate flight progress fraction between 0.0 and 1.0 (safeguarded against NaN)
 function getFlightProgress(flight, currentTimeStr) {
   const dep = parseSimDate(flight.departure);
   const arr = parseSimDate(flight.arrival);
   const now = parseSimDate(currentTimeStr);
+  
   if (!dep || !arr || !now) return 0;
+  if (isNaN(dep.getTime()) || isNaN(arr.getTime()) || isNaN(now.getTime())) return 0;
+  
   if (now <= dep) return 0;
   if (now >= arr) return 1;
+  
   const total = arr.getTime() - dep.getTime();
   const elapsed = now.getTime() - dep.getTime();
-  return total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
+  
+  if (isNaN(total) || isNaN(elapsed) || total <= 0) return 0;
+  
+  return Math.min(1, Math.max(0, elapsed / total));
 }
 
 // Generate quadratic Bezier points for curved lines
@@ -296,16 +333,19 @@ function updateMap() {
         cancelAnimationFrame(planeMarker.animationFrameId);
       }
 
-      // Animate marker from current displayedProgress to targetProgress
+      // Animate marker from current displayedProgress to targetProgress (safeguarded against NaN)
       let startProgress = planeMarker.displayedProgress || 0;
+      if (isNaN(startProgress)) startProgress = 0;
+      let finalTargetProgress = targetProgress || 0;
+      if (isNaN(finalTargetProgress)) finalTargetProgress = 0;
       
       // If target progress is behind current displayed progress (simulation reset or rewind)
-      if (targetProgress < startProgress) {
-        startProgress = targetProgress;
-        planeMarker.displayedProgress = targetProgress;
+      if (finalTargetProgress < startProgress) {
+        startProgress = finalTargetProgress;
+        planeMarker.displayedProgress = finalTargetProgress;
       }
 
-      const progressDiff = targetProgress - startProgress;
+      const progressDiff = finalTargetProgress - startProgress;
       const animDuration = 1500; // Animate over 1.5 seconds
       const startTime = performance.now();
 
@@ -314,7 +354,8 @@ function updateMap() {
         const t = Math.min(1, elapsed / animDuration);
         
         // Glide along path linearly
-        const currentProgress = startProgress + progressDiff * t;
+        let currentProgress = startProgress + progressDiff * t;
+        if (isNaN(currentProgress)) currentProgress = finalTargetProgress;
         planeMarker.displayedProgress = currentProgress;
 
         const idx = Math.floor(currentProgress * (points.length - 1));
@@ -355,9 +396,11 @@ function updateMap() {
         planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
       } else {
         // Direct update if no difference
-        const idx = Math.floor(targetProgress * (points.length - 1));
+        let safeTargetProgress = targetProgress || 0;
+        if (isNaN(safeTargetProgress)) safeTargetProgress = 0;
+        const idx = Math.floor(safeTargetProgress * (points.length - 1));
         const currentPos = points[idx];
-        planeMarker.setLatLng(currentPos);
+        if (currentPos) planeMarker.setLatLng(currentPos);
 
         const nextIdx = Math.min(idx + 1, points.length - 1);
         const prevIdx = Math.max(idx - 1, 0);
