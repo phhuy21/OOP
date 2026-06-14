@@ -7,7 +7,7 @@ let STATE = null;
 let map = null;
 let airportMarkers = {};
 let flightPaths = [];
-let flightPlaneMarkers = [];
+let flightMarkers = {};
 
 // Tọa độ địa lý của các sân bay tại Việt Nam
 const AIRPORT_COORDS = {
@@ -101,11 +101,12 @@ function initMap() {
 function updateMap() {
   if (!map || !STATE) return;
 
-  // Clear previous flights lines & planes
+  // Clear previous flights lines
   flightPaths.forEach(p => map.removeLayer(p));
   flightPaths = [];
-  flightPlaneMarkers.forEach(m => map.removeLayer(m));
-  flightPlaneMarkers = [];
+
+  // Track active flights in the air
+  const activeFlightCodes = new Set();
 
   // Update or render Airports
   STATE.airports.forEach(ap => {
@@ -234,69 +235,161 @@ function updateMap() {
       flightPath.setStyle({ weight: isFlying ? 2.5 : 1.5, opacity: isFlying ? 0.8 : 0.35 });
     });
 
-    // If flight is currently in the air, compute its position
+    // If flight is currently in the air, compute and animate its position
     if (isFlying) {
-      const progress = getFlightProgress(f, STATE.currentTime);
-      const idx = Math.floor(progress * (points.length - 1));
-      const currentPos = points[idx];
-
-      // Rotation Angle based on projected screen pixels (safeguards map aspect ratio)
-      const nextIdx = Math.min(idx + 1, points.length - 1);
-      const prevIdx = Math.max(idx - 1, 0);
-      const p1 = points[prevIdx];
-      const p2 = points[nextIdx];
-
-      const pixel1 = map.project(p1, map.getZoom());
-      const pixel2 = map.project(p2, map.getZoom());
-      const dx = pixel2.x - pixel1.x;
-      const dy = pixel2.y - pixel1.y;
-      let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      angle += 90; // SVG points up -> rotate 90 deg for horizontal baseline
-
+      activeFlightCodes.add(f.code);
+      const targetProgress = getFlightProgress(f, STATE.currentTime);
       const planeColor = f.emergency ? 'var(--red)' : 'var(--accent)';
       const planeStroke = '#ffffff';
 
-      const planeIconHtml = `
-        <div class="plane-icon-wrapper" style="transform: rotate(${angle}deg);">
-          <svg class="plane-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="${planeColor}" stroke="${planeStroke}" stroke-width="1.2">
-            <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5l8 2.5z"/>
-          </svg>
-          <div class="plane-label">${f.code}</div>
-        </div>
-      `;
+      let planeMarker = flightMarkers[f.code];
+      
+      if (!planeMarker) {
+        // Create marker initially at progress 0 or targetProgress (glide out of origin)
+        const startProgress = 0;
+        const initialPos = points[0];
 
-      const planeIcon = L.divIcon({
-        className: 'plane-marker-icon',
-        html: planeIconHtml,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      });
+        const planeIconHtml = `
+          <div class="plane-icon-wrapper" style="transform: rotate(0deg);">
+            <svg class="plane-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="${planeColor}" stroke="${planeStroke}" stroke-width="1.2">
+              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5l8 2.5z"/>
+            </svg>
+            <div class="plane-label">${f.code}</div>
+          </div>
+        `;
 
-      const planeMarker = L.marker(currentPos, { icon: planeIcon }).addTo(map);
-      flightPlaneMarkers.push(planeMarker);
+        const planeIcon = L.divIcon({
+          className: 'plane-marker-icon',
+          html: planeIconHtml,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        planeMarker = L.marker(initialPos, { icon: planeIcon }).addTo(map);
+        planeMarker.displayedProgress = startProgress;
+        flightMarkers[f.code] = planeMarker;
+
+        // On click, switch to Flight tab and scroll to flight card
+        planeMarker.on('click', () => {
+          const tabBtn = document.querySelector('.tab[data-tab="flights"]');
+          if (tabBtn) {
+            tabBtn.click();
+            setTimeout(() => {
+              const cards = document.querySelectorAll('#flights-list .card');
+              for (const card of cards) {
+                if (card.innerHTML.includes(f.code)) {
+                  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  card.style.borderColor = 'var(--accent)';
+                  setTimeout(() => card.style.borderColor = '', 2000);
+                  break;
+                }
+              }
+            }, 150);
+          }
+        });
+      }
 
       planeMarker.bindPopup(popupHtml);
 
-      // On click, switch to Flight tab and scroll to flight card
-      planeMarker.on('click', () => {
-        const tabBtn = document.querySelector('.tab[data-tab="flights"]');
-        if (tabBtn) {
-          tabBtn.click();
-          setTimeout(() => {
-            const cards = document.querySelectorAll('#flights-list .card');
-            for (const card of cards) {
-              if (card.innerHTML.includes(f.code)) {
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                card.style.borderColor = 'var(--accent)';
-                setTimeout(() => card.style.borderColor = '', 2000);
-                break;
-              }
-            }
-          }, 150);
+      // Cancel previous animation frame if still running
+      if (planeMarker.animationFrameId) {
+        cancelAnimationFrame(planeMarker.animationFrameId);
+      }
+
+      // Animate marker from current displayedProgress to targetProgress
+      let startProgress = planeMarker.displayedProgress || 0;
+      
+      // If target progress is behind current displayed progress (simulation reset or rewind)
+      if (targetProgress < startProgress) {
+        startProgress = targetProgress;
+        planeMarker.displayedProgress = targetProgress;
+      }
+
+      const progressDiff = targetProgress - startProgress;
+      const animDuration = 1500; // Animate over 1.5 seconds
+      const startTime = performance.now();
+
+      function animatePlane(nowTime) {
+        const elapsed = nowTime - startTime;
+        const t = Math.min(1, elapsed / animDuration);
+        
+        // Glide along path linearly
+        const currentProgress = startProgress + progressDiff * t;
+        planeMarker.displayedProgress = currentProgress;
+
+        const idx = Math.floor(currentProgress * (points.length - 1));
+        const currentPos = points[idx];
+
+        // Rotation angle
+        const nextIdx = Math.min(idx + 1, points.length - 1);
+        const prevIdx = Math.max(idx - 1, 0);
+        const p1 = points[prevIdx];
+        const p2 = points[nextIdx];
+
+        const pixel1 = map.project(p1, map.getZoom());
+        const pixel2 = map.project(p2, map.getZoom());
+        const dx = pixel2.x - pixel1.x;
+        const dy = pixel2.y - pixel1.y;
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+
+        // Set marker position
+        planeMarker.setLatLng(currentPos);
+
+        // Update rotation transform
+        const iconEl = planeMarker.getElement();
+        if (iconEl) {
+          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
+          if (wrapper) {
+            wrapper.style.transform = `rotate(${angle}deg)`;
+          }
         }
-      });
+
+        if (t < 1) {
+          planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
+        } else {
+          planeMarker.animationFrameId = null;
+        }
+      }
+
+      if (progressDiff > 0.0001) {
+        planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
+      } else {
+        // Direct update if no difference
+        const idx = Math.floor(targetProgress * (points.length - 1));
+        const currentPos = points[idx];
+        planeMarker.setLatLng(currentPos);
+
+        const nextIdx = Math.min(idx + 1, points.length - 1);
+        const prevIdx = Math.max(idx - 1, 0);
+        const p1 = points[prevIdx];
+        const p2 = points[nextIdx];
+
+        const pixel1 = map.project(p1, map.getZoom());
+        const pixel2 = map.project(p2, map.getZoom());
+        let angle = Math.atan2(pixel2.y - pixel1.y, pixel2.x - pixel1.x) * 180 / Math.PI + 90;
+
+        const iconEl = planeMarker.getElement();
+        if (iconEl) {
+          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
+          if (wrapper) {
+            wrapper.style.transform = `rotate(${angle}deg)`;
+          }
+        }
+      }
     }
   });
+
+  // Cleanup of inactive flights
+  for (const code in flightMarkers) {
+    if (!activeFlightCodes.has(code)) {
+      const marker = flightMarkers[code];
+      if (marker.animationFrameId) {
+        cancelAnimationFrame(marker.animationFrameId);
+      }
+      map.removeLayer(marker);
+      delete flightMarkers[code];
+    }
+  }
 
   lucide.createIcons();
 }
