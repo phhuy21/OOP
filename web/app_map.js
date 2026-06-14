@@ -751,6 +751,7 @@ function openModal(code) {
   
   $("#modal-title").innerHTML = `<i data-lucide="settings" style="display:inline-block; vertical-align:middle; margin-right:6px;"></i> Chuyến ${f.code} — ${f.status}`;
   
+  const canCheckIn = f.status === "CheckIn" || f.status === "Boarding";
   const pax = f.passengers.map((pid) => {
     const p = STATE.passengers.find((x) => x.id === pid);
     const name = p ? p.name : pid;
@@ -759,11 +760,14 @@ function openModal(code) {
     if (p && p.boarded) { stText = "Đã lên máy bay"; statusClass = "completed"; }
     else if (p && p.checkedIn) { stText = `Đã check-in (Ghế ${p.seat})`; statusClass = "boarding"; }
     
+    const isBtnDisabled = !canCheckIn || (p && p.checkedIn);
+    const btnTitle = !canCheckIn ? "Chỉ có thể check-in khi trạng thái chuyến bay là Check-in hoặc Boarding" : "";
+    
     return `
       <div class="pax-line">
         <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:1px 5px;">${stText}</span>)</small></span>
         <span class="pax-actions">
-          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${p && p.checkedIn ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${isBtnDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} title="${esc(btnTitle)}">
             <i data-lucide="check-square"></i> Check-in
           </button>
           <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${p && (!p.checkedIn || p.boarded) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
