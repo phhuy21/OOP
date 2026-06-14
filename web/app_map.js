@@ -8,6 +8,7 @@ let map = null;
 let airportMarkers = {};
 let flightPaths = [];
 let flightMarkers = {};
+let weatherOverlays = [];
 
 // Tọa độ địa lý của các sân bay tại Việt Nam
 const AIRPORT_COORDS = {
@@ -142,6 +143,10 @@ function updateMap() {
   flightPaths.forEach(p => map.removeLayer(p));
   flightPaths = [];
 
+  // Clear previous weather overlays
+  weatherOverlays.forEach(o => map.removeLayer(o));
+  weatherOverlays = [];
+
   // Track active flights in the air
   const activeFlightCodes = new Set();
 
@@ -190,6 +195,34 @@ function updateMap() {
       if (el) {
         el.className = `airport-marker ${emergency ? 'emergency' : (weatherBad ? 'weather-bad' : '')}`;
       }
+    }
+
+    // Render Windy-style weather radar sweep overlay if weather is bad
+    if (weatherBad) {
+      const isSevere = ap.note.toLowerCase().includes('bão') || 
+                       ap.note.toLowerCase().includes('đóng cửa') || 
+                       ap.note.toLowerCase().includes('huỷ') || 
+                       ap.note.toLowerCase().includes('khẩn');
+      
+      const weatherOverlayHtml = `
+        <div class="radar-sweep-container" style="pointer-events:none;">
+          <div class="weather-storm-cell ${isSevere ? 'severe' : ''}"></div>
+          <div class="radar-sweep"></div>
+          <div class="weather-icon-badge ${isSevere ? 'severe' : ''}">
+            <i data-lucide="${isSevere ? 'cloud-lightning' : 'cloud-rain'}"></i>
+          </div>
+        </div>
+      `;
+      
+      const weatherIcon = L.divIcon({
+        className: 'weather-radar-overlay',
+        html: weatherOverlayHtml,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      });
+      
+      const wOverlay = L.marker(coords, { icon: weatherIcon }).addTo(map);
+      weatherOverlays.push(wOverlay);
     }
 
     // Bind popup with airport details
