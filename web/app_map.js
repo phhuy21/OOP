@@ -513,14 +513,14 @@ function getTimelineHtml(status) {
   }
   
   const stages = [
-    { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn'] },
+    { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn', 'Check-in'] },
     { id: 'bd', label: 'Lên máy bay', matches: ['Boarding'] },
     { id: 'ia', label: 'Đang bay', matches: ['Takeoff', 'InAir'] },
     { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Completed'] }
   ];
   
   let currentIdx = -1;
-  if (['Scheduled', 'Delayed', 'CheckIn'].includes(status)) currentIdx = 0;
+  if (['Scheduled', 'Delayed', 'CheckIn', 'Check-in'].includes(status)) currentIdx = 0;
   else if (status === 'Boarding') currentIdx = 1;
   else if (['Takeoff', 'InAir'].includes(status)) currentIdx = 2;
   else if (['Landed', 'Completed'].includes(status)) currentIdx = 3;
@@ -751,7 +751,7 @@ function openModal(code) {
   
   $("#modal-title").innerHTML = `<i data-lucide="settings" style="display:inline-block; vertical-align:middle; margin-right:6px;"></i> Chuyến ${f.code} — ${f.status}`;
   
-  const canCheckIn = f.status === "CheckIn" || f.status === "Boarding";
+  const canCheckIn = f.status === "CheckIn" || f.status === "Check-in" || f.status === "Boarding";
   const pax = f.passengers.map((pid) => {
     const p = STATE.passengers.find((x) => x.id === pid);
     const name = p ? p.name : pid;
