@@ -87,11 +87,12 @@ OpResult Flight::advance(const std::vector<std::string>& crewIssues) {
     FlightStatus target = nextStatus(status_);
 
     // Điều kiện đặc thù khi chuyển sang "Ready" (sẵn sàng cất cánh).
+    // Mô hình thu gọn: chỉ cần máy bay + gate; tổ bay là tuỳ chọn.
+    // (Nếu CÓ gán tổ bay thì vẫn kiểm tra tính hợp lệ để giữ logic OOP.)
     if (target == FlightStatus::Ready) {
         if (!aircraft_) return OpResult::failure("Chưa gán máy bay, không thể chuyển sang Ready.");
-        if (!crew_)     return OpResult::failure("Chưa gán tổ bay, không thể chuyển sang Ready.");
         if (gateCode_.empty()) return OpResult::failure("Chưa gán gate, không thể chuyển sang Ready.");
-        if (!crewIssues.empty()) {
+        if (crew_ && !crewIssues.empty()) {
             std::string m = "Không thể sẵn sàng do tổ bay không hợp lệ: ";
             for (size_t i = 0; i < crewIssues.size(); ++i) {
                 if (i) m += " | ";

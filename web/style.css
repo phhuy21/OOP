@@ -1,73 +1,13 @@
 @import url('style_old.css');
 
-/* Custom Layout for Map Dashboard */
+/* Bố cục full-width (đã bỏ bản đồ — mô hình 1 sân bay) */
 .dashboard-layout {
-  display: flex;
-  flex-direction: row;
-  gap: 24px;
   padding: 0 24px 40px;
-  align-items: stretch;
-  max-width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }
-
-.map-wrapper {
-  flex: 1.2;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: var(--glass-border);
-  border-radius: 12px;
-  box-shadow: var(--card-shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  overflow: hidden;
-  height: 680px;
-  position: sticky;
-  top: 80px;
-}
-
-.map-header {
-  padding: 14px 20px;
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.05em;
-  border-bottom: var(--line);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--txt);
-  background: rgba(15, 23, 42, 0.4);
-}
-
-.map-header i {
-  color: var(--accent);
-}
-
-#map {
-  flex: 1;
-  width: 100%;
-  background: #0d111a;
-  z-index: 1;
-}
-
 .dashboard-layout main {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  margin: 0;
-  max-height: 680px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-/* Scrollbar adjustment for main panel in map layout */
-.dashboard-layout main::-webkit-scrollbar {
-  width: 6px;
-}
-.dashboard-layout main::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 3px;
+  width: 100%;
 }
 
 /* Custom Leaflet Map Overrides */
@@ -463,4 +403,115 @@
 @keyframes bounce-weather {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
+}
+
+/* ===== Đăng nhập & phân quyền (thêm cho hệ thống tài khoản) ===== */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(1200px 600px at 50% -10%, rgba(59,130,246,0.25), transparent), var(--bg);
+}
+.login-box {
+  width: min(380px, 92vw);
+  background: var(--panel2, #1e293b);
+  border: var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+  padding: 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(12px);
+}
+.login-brand {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--txt);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.login-brand i { color: var(--accent); }
+.login-sub { color: var(--muted); font-size: 13px; margin-top: -6px; }
+.login-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.login-box input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.25);
+  color: var(--txt);
+  font-size: 14px;
+}
+.login-box .btn { justify-content: center; margin-top: 4px; }
+.login-error { color: var(--red); font-size: 13px; min-height: 16px; }
+.login-hint { color: var(--muted); font-size: 12px; text-align: center; }
+.user-info {
+  color: var(--txt);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+}
+.user-info i { width: 15px; height: 15px; color: var(--accent); }
+/* Trước khi đăng nhập, ẩn các nút thao tác trên topbar (overlay đã che, nhưng cho chắc). */
+body:not(.logged-in) #btn-reload,
+body:not(.logged-in) #btn-reset,
+body:not(.logged-in) #btn-logout { display: none; }
+.rw-del {
+  color: var(--red);
+  cursor: pointer;
+  font-weight: 700;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.rw-del:hover { background: rgba(239,68,68,0.15); }
+.admin-only { display: none; }
+
+/* ===== Giám sát hành khách ===== */
+.alerts { display: flex; flex-direction: column; gap: 8px; }
+.alert {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  border: 1px solid var(--line); background: var(--panel2, #1e293b);
+}
+.alert i { width: 18px; height: 18px; flex-shrink: 0; }
+.alert.warn { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.10); }
+.alert.warn i { color: var(--amber); }
+.alert.info { border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.10); }
+.alert.info i { color: var(--accent); }
+.alert.ok { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.10); }
+.alert.ok i { color: var(--green); }
+.alert b { color: var(--txt); }
+
+.monitor-card .monitor-stats {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  margin: 12px 0 10px;
+}
+.mstat {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(255,255,255,0.04); border-radius: 8px; padding: 8px 4px;
+}
+.mstat-num { font-size: 18px; font-weight: 800; color: var(--txt); line-height: 1; }
+.mstat-lbl { font-size: 10px; color: var(--muted); margin-top: 4px; text-align: center; }
+.mstat.warn-text .mstat-num { color: var(--amber); }
+.loadbar {
+  height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08);
+  overflow: hidden; margin-top: 4px;
+}
+.loadbar-fill {
+  height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width 0.4s ease;
 }

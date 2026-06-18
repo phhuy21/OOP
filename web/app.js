@@ -1,26 +1,22 @@
-// SkyGate Map Web — bọc giao diện giám sát bản đồ bay Việt Nam.
+// SkyGate Web — quản lý 1 sân bay nhà + giám sát hành khách.
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 let STATE = null;
 
-// Leaflet map instances
-let map = null;
-let airportMarkers = {};
-let flightPaths = [];
-let flightMarkers = {};
-let weatherOverlays = [];
-
-// Tọa độ địa lý của các sân bay tại Việt Nam
-const AIRPORT_COORDS = {
-  PHG: [21.2212, 105.8072],   // Sân bay Quốc tế Phương Hoàng (Hà Nội)
-  CLG: [10.8184, 106.6588],   // Sân bay Quốc tế Cửu Long (TP.HCM)
-  HAU: [10.2244, 103.9608],   // Sân bay Đảo Hải Âu (Phú Quốc)
-  MHA: [22.3364, 103.8438]    // Sân bay Thung Lũng Mường Hoa (Sa Pa)
-};
+// ---------- Phiên đăng nhập ----------
+let CURRENT_USER = null;
+function loadUser() {
+  try { CURRENT_USER = JSON.parse(localStorage.getItem("skygate_user") || "null"); }
+  catch (e) { CURRENT_USER = null; }
+}
+function can(tab) { return !!(CURRENT_USER && CURRENT_USER.menu && CURRENT_USER.menu.includes(tab)); }
+function isRole(...roles) { return !!(CURRENT_USER && roles.includes(CURRENT_USER.role)); }
 
 async function api(path, params) {
   const opt = { method: params ? "POST" : "GET" };
   if (params) {
+    // Tự gắn 'actor' (tài khoản đang đăng nhập) cho mọi thao tác ghi để backend phân quyền.
+    if (CURRENT_USER && !("actor" in params)) params = { ...params, actor: CURRENT_USER.username };
     opt.headers = { "Content-Type": "application/x-www-form-urlencoded" };
     opt.body = new URLSearchParams(params).toString();
   }
@@ -41,435 +37,7 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-// Helper to parse dates in simulated time format (robust cross-browser parsing)
-function parseSimDate(dateStr) {
-  if (!dateStr) return null;
-  
-  const cleanedStr = dateStr.trim();
-  
-  // Try YYYY/MM/DD HH:MM:SS format first (highly cross-browser compatible)
-  let d = new Date(cleanedStr.replace(/-/g, '/'));
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Try ISO format with T
-  d = new Date(cleanedStr.replace(' ', 'T'));
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Direct new Date
-  d = new Date(dateStr);
-  if (d && !isNaN(d.getTime())) return d;
-  
-  // Manual string split fallback
-  const parts = cleanedStr.split(' ');
-  if (parts.length >= 2) {
-    const dateParts = parts[0].split('-');
-    const timeParts = parts[1].split(':');
-    if (dateParts.length === 3 && timeParts.length >= 2) {
-      const year = parseInt(dateParts[0], 10);
-      const month = parseInt(dateParts[1], 10) - 1;
-      const day = parseInt(dateParts[2], 10);
-      const hour = parseInt(timeParts[0], 10);
-      const minute = parseInt(timeParts[1], 10);
-      const second = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
-      const parsedDate = new Date(year, month, day, hour, minute, second);
-      if (parsedDate && !isNaN(parsedDate.getTime())) return parsedDate;
-    }
-  }
-  return null;
-}
-
-// Calculate flight progress fraction between 0.0 and 1.0 (safeguarded against NaN)
-function getFlightProgress(flight, currentTimeStr) {
-  const dep = parseSimDate(flight.departure);
-  const arr = parseSimDate(flight.arrival);
-  const now = parseSimDate(currentTimeStr);
-  
-  if (!dep || !arr || !now) return 0;
-  if (isNaN(dep.getTime()) || isNaN(arr.getTime()) || isNaN(now.getTime())) return 0;
-  
-  if (now <= dep) return 0;
-  if (now >= arr) return 1;
-  
-  const total = arr.getTime() - dep.getTime();
-  const elapsed = now.getTime() - dep.getTime();
-  
-  if (isNaN(total) || isNaN(elapsed) || total <= 0) return 0;
-  
-  return Math.min(1, Math.max(0, elapsed / total));
-}
-
-// Generate quadratic Bezier points for curved lines
-function getBezierPoints(p1, p2, offset = 0.15) {
-  const midX = (p1[0] + p2[0]) / 2;
-  const midY = (p1[1] + p2[1]) / 2;
-  const dx = p2[0] - p1[0];
-  const dy = p2[1] - p1[1];
-  
-  // Perpendicular control point
-  const controlX = midX - dy * offset;
-  const controlY = midY + dx * offset;
-  
-  const points = [];
-  const steps = 30;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = (1-t)*(1-t)*p1[0] + 2*(1-t)*t*controlX + t*t*p2[0];
-    const y = (1-t)*(1-t)*p1[1] + 2*(1-t)*t*controlY + t*t*p2[1];
-    points.push([x, y]);
-  }
-  return points;
-}
-
-function initMap() {
-  // Center map on Central Vietnam
-  map = L.map('map', {
-    zoomControl: true,
-    maxZoom: 12,
-    minZoom: 4
-  }).setView([16.4, 106.5], 5.5);
-
-  // CartoDB Dark Matter map layer (very sleek dark theme)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CartoDB</a>',
-    subdomains: 'abcd',
-    maxZoom: 20
-  }).addTo(map);
-}
-
-function updateMap() {
-  if (!map || !STATE) return;
-
-  // Clear previous flights lines
-  flightPaths.forEach(p => map.removeLayer(p));
-  flightPaths = [];
-
-  // Clear previous weather overlays
-  weatherOverlays.forEach(o => map.removeLayer(o));
-  weatherOverlays = [];
-
-  // Track active flights in the air
-  const activeFlightCodes = new Set();
-
-  // Update or render Airports
-  STATE.airports.forEach(ap => {
-    const coords = AIRPORT_COORDS[ap.code];
-    if (!coords) return;
-
-    let weatherBad = false;
-    let emergency = false;
-
-    // Check bad weather state via notes
-    if (ap.note && ap.note !== "Thời tiết tốt" && ap.note !== "Bình thường" && ap.note !== "") {
-      weatherBad = true;
-    }
-
-    // Check emergency flights targeting this airport
-    const activeEmergencies = STATE.flights.filter(f => 
-      (f.origin === ap.code || f.dest === ap.code) && 
-      f.emergency && 
-      f.status !== "Completed" && 
-      f.status !== "Landed" && 
-      f.status !== "Cancelled"
-    );
-    if (activeEmergencies.length > 0) {
-      emergency = true;
-    }
-
-    let marker = airportMarkers[ap.code];
-    if (!marker) {
-      const icon = L.divIcon({
-        className: 'airport-marker-container',
-        html: `<div class="airport-marker ${emergency ? 'emergency' : (weatherBad ? 'weather-bad' : '')}" id="marker-${ap.code}">
-                <div class="airport-pulse"></div>
-                <div class="airport-dot"></div>
-                <div class="airport-label">${ap.code}</div>
-               </div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
-      });
-
-      marker = L.marker(coords, { icon }).addTo(map);
-      airportMarkers[ap.code] = marker;
-    } else {
-      const el = document.getElementById(`marker-${ap.code}`);
-      if (el) {
-        el.className = `airport-marker ${emergency ? 'emergency' : (weatherBad ? 'weather-bad' : '')}`;
-      }
-    }
-
-    // Render Windy-style weather radar sweep overlay if weather is bad
-    if (weatherBad) {
-      const isSevere = ap.note.toLowerCase().includes('bão') || 
-                       ap.note.toLowerCase().includes('đóng cửa') || 
-                       ap.note.toLowerCase().includes('huỷ') || 
-                       ap.note.toLowerCase().includes('khẩn');
-      
-      const weatherOverlayHtml = `
-        <div class="radar-sweep-container" style="pointer-events:none;">
-          <div class="weather-storm-cell ${isSevere ? 'severe' : ''}"></div>
-          <div class="radar-sweep"></div>
-          <div class="weather-icon-badge ${isSevere ? 'severe' : ''}">
-            <i data-lucide="${isSevere ? 'cloud-lightning' : 'cloud-rain'}"></i>
-          </div>
-        </div>
-      `;
-      
-      const weatherIcon = L.divIcon({
-        className: 'weather-radar-overlay',
-        html: weatherOverlayHtml,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0]
-      });
-      
-      const wOverlay = L.marker(coords, { icon: weatherIcon }).addTo(map);
-      weatherOverlays.push(wOverlay);
-    }
-
-    // Bind popup with airport details
-    const popupHtml = `
-      <div style="font-size:12px; line-height:1.4; min-width: 180px;">
-        <h3 style="margin:0 0 6px 0; color:var(--accent); font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px;">
-          <i data-lucide="building-2" style="width:14px; height:14px;"></i> ${ap.code} — ${ap.name}
-        </h3>
-        <p style="margin:2px 0;"><b>Tình trạng:</b> <span style="color:${emergency ? 'var(--red)' : (weatherBad ? 'var(--amber)' : 'var(--green)')}; font-weight:600;">${esc(ap.note || "Bình thường")}</span></p>
-        <p style="margin:2px 0;"><b>Đường băng dài nhất:</b> ${ap.longestRunway}m</p>
-        <p style="margin:2px 0;"><b>Đường băng:</b> ${ap.runways.map(r => r.code).join(', ')}</p>
-        <p style="margin:2px 0;"><b>Cổng đỗ:</b> ${ap.gates.length} cổng</p>
-      </div>
-    `;
-    marker.bindPopup(popupHtml);
-
-    // On click, switch to Airport tab and scroll to card
-    marker.off('click');
-    marker.on('click', () => {
-      const tabBtn = document.querySelector('.tab[data-tab="airports"]');
-      if (tabBtn) {
-        tabBtn.click();
-        setTimeout(() => {
-          const cards = document.querySelectorAll('#airports-list .card');
-          for (const card of cards) {
-            if (card.innerHTML.includes(ap.code)) {
-              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              card.style.borderColor = 'var(--accent)';
-              setTimeout(() => card.style.borderColor = '', 2000);
-              break;
-            }
-          }
-        }, 150);
-      }
-    });
-  });
-
-  // Render Flights and Moving Plane Markers
-  STATE.flights.forEach(f => {
-    if (f.status === "Cancelled" || f.status === "Landed" || f.status === "Completed") return;
-
-    const startCoords = AIRPORT_COORDS[f.origin];
-    const endCoords = AIRPORT_COORDS[f.dest];
-    if (!startCoords || !endCoords) return;
-
-    // Create curved flight path
-    const codeHash = [...f.code].reduce((a, c) => a + c.charCodeAt(0), 0);
-    const curvature = 0.12 + (codeHash % 8) * 0.02; // Curved differently to avoid overlays
-    const points = getBezierPoints(startCoords, endCoords, curvature);
-
-    const isFlying = f.status === "Takeoff" || f.status === "InAir";
-    const pathColor = f.emergency ? 'var(--red)' : 'var(--accent)';
-
-    // Polyline glow and main line
-    const flightPath = L.polyline(points, {
-      color: pathColor,
-      weight: isFlying ? 2.5 : 1.5,
-      opacity: isFlying ? 0.8 : 0.35,
-      dashArray: isFlying ? '' : '6, 6'
-    }).addTo(map);
-    flightPaths.push(flightPath);
-
-    // Add popup info on line
-    const popupHtml = `
-      <div style="font-size:12px; line-height:1.4;">
-        <h3 style="margin:0 0 6px 0; color:${f.emergency ? 'var(--red)' : 'var(--accent)'}; font-size:13px; font-weight:700;">Chuyến ${f.code}</h3>
-        <p style="margin:2px 0;"><b>Tuyến:</b> ${f.origin} &rarr; ${f.dest}</p>
-        <p style="margin:2px 0;"><b>Trạng thái:</b> <span class="${statusClass(f.status)}">${f.status}</span></p>
-        <p style="margin:2px 0;"><b>Khởi hành:</b> ${f.departure || '—'}</p>
-        <p style="margin:2px 0;"><b>Dự kiến đến:</b> ${f.arrival || '—'}</p>
-        ${f.note ? `<p style="margin:2px 0; color:var(--red);"><b>Chú ý:</b> ${esc(f.note)}</p>` : ''}
-      </div>
-    `;
-    flightPath.bindPopup(popupHtml);
-
-    flightPath.on('mouseover', () => {
-      flightPath.setStyle({ weight: 4, opacity: 1 });
-    });
-    flightPath.on('mouseout', () => {
-      flightPath.setStyle({ weight: isFlying ? 2.5 : 1.5, opacity: isFlying ? 0.8 : 0.35 });
-    });
-
-    // If flight is currently in the air, compute and animate its position
-    if (isFlying) {
-      activeFlightCodes.add(f.code);
-      const targetProgress = getFlightProgress(f, STATE.currentTime);
-      const planeColor = f.emergency ? 'var(--red)' : 'var(--accent)';
-      const planeStroke = '#ffffff';
-
-      let planeMarker = flightMarkers[f.code];
-      
-      if (!planeMarker) {
-        // Create marker initially at progress 0 or targetProgress (glide out of origin)
-        const startProgress = 0;
-        const initialPos = points[0];
-
-        const planeIconHtml = `
-          <div class="plane-icon-wrapper" style="transform: rotate(0deg);">
-            <svg class="plane-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="${planeColor}" stroke="${planeStroke}" stroke-width="1.2">
-              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5l8 2.5z"/>
-            </svg>
-            <div class="plane-label">${f.code}</div>
-          </div>
-        `;
-
-        const planeIcon = L.divIcon({
-          className: 'plane-marker-icon',
-          html: planeIconHtml,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
-
-        planeMarker = L.marker(initialPos, { icon: planeIcon }).addTo(map);
-        planeMarker.displayedProgress = startProgress;
-        flightMarkers[f.code] = planeMarker;
-
-        // On click, switch to Flight tab and scroll to flight card
-        planeMarker.on('click', () => {
-          const tabBtn = document.querySelector('.tab[data-tab="flights"]');
-          if (tabBtn) {
-            tabBtn.click();
-            setTimeout(() => {
-              const cards = document.querySelectorAll('#flights-list .card');
-              for (const card of cards) {
-                if (card.innerHTML.includes(f.code)) {
-                  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  card.style.borderColor = 'var(--accent)';
-                  setTimeout(() => card.style.borderColor = '', 2000);
-                  break;
-                }
-              }
-            }, 150);
-          }
-        });
-      }
-
-      planeMarker.bindPopup(popupHtml);
-
-      // Cancel previous animation frame if still running
-      if (planeMarker.animationFrameId) {
-        cancelAnimationFrame(planeMarker.animationFrameId);
-      }
-
-      // Animate marker from current displayedProgress to targetProgress (safeguarded against NaN)
-      let startProgress = planeMarker.displayedProgress || 0;
-      if (isNaN(startProgress)) startProgress = 0;
-      let finalTargetProgress = targetProgress || 0;
-      if (isNaN(finalTargetProgress)) finalTargetProgress = 0;
-      
-      // If target progress is behind current displayed progress (simulation reset or rewind)
-      if (finalTargetProgress < startProgress) {
-        startProgress = finalTargetProgress;
-        planeMarker.displayedProgress = finalTargetProgress;
-      }
-
-      const progressDiff = finalTargetProgress - startProgress;
-      const animDuration = 1500; // Animate over 1.5 seconds
-      const startTime = performance.now();
-
-      function animatePlane(nowTime) {
-        const elapsed = nowTime - startTime;
-        const t = Math.min(1, elapsed / animDuration);
-        
-        // Glide along path linearly
-        let currentProgress = startProgress + progressDiff * t;
-        if (isNaN(currentProgress)) currentProgress = finalTargetProgress;
-        planeMarker.displayedProgress = currentProgress;
-
-        const idx = Math.floor(currentProgress * (points.length - 1));
-        const currentPos = points[idx];
-
-        // Rotation angle
-        const nextIdx = Math.min(idx + 1, points.length - 1);
-        const prevIdx = Math.max(idx - 1, 0);
-        const p1 = points[prevIdx];
-        const p2 = points[nextIdx];
-
-        const pixel1 = map.project(p1, map.getZoom());
-        const pixel2 = map.project(p2, map.getZoom());
-        const dx = pixel2.x - pixel1.x;
-        const dy = pixel2.y - pixel1.y;
-        let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
-
-        // Set marker position
-        planeMarker.setLatLng(currentPos);
-
-        // Update rotation transform
-        const iconEl = planeMarker.getElement();
-        if (iconEl) {
-          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
-          if (wrapper) {
-            wrapper.style.transform = `rotate(${angle}deg)`;
-          }
-        }
-
-        if (t < 1) {
-          planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
-        } else {
-          planeMarker.animationFrameId = null;
-        }
-      }
-
-      if (progressDiff > 0.0001) {
-        planeMarker.animationFrameId = requestAnimationFrame(animatePlane);
-      } else {
-        // Direct update if no difference
-        let safeTargetProgress = targetProgress || 0;
-        if (isNaN(safeTargetProgress)) safeTargetProgress = 0;
-        const idx = Math.floor(safeTargetProgress * (points.length - 1));
-        const currentPos = points[idx];
-        if (currentPos) planeMarker.setLatLng(currentPos);
-
-        const nextIdx = Math.min(idx + 1, points.length - 1);
-        const prevIdx = Math.max(idx - 1, 0);
-        const p1 = points[prevIdx];
-        const p2 = points[nextIdx];
-
-        const pixel1 = map.project(p1, map.getZoom());
-        const pixel2 = map.project(p2, map.getZoom());
-        let angle = Math.atan2(pixel2.y - pixel1.y, pixel2.x - pixel1.x) * 180 / Math.PI + 90;
-
-        const iconEl = planeMarker.getElement();
-        if (iconEl) {
-          const wrapper = iconEl.querySelector('.plane-icon-wrapper');
-          if (wrapper) {
-            wrapper.style.transform = `rotate(${angle}deg)`;
-          }
-        }
-      }
-    }
-  });
-
-  // Cleanup of inactive flights
-  for (const code in flightMarkers) {
-    if (!activeFlightCodes.has(code)) {
-      const marker = flightMarkers[code];
-      if (marker.animationFrameId) {
-        cancelAnimationFrame(marker.animationFrameId);
-      }
-      map.removeLayer(marker);
-      delete flightMarkers[code];
-    }
-  }
-
-  lucide.createIcons();
-}
-
+// ---------- Tải & render toàn bộ trạng thái ----------
 async function load() {
   STATE = await api("/api/state");
   
@@ -485,16 +53,21 @@ async function load() {
   renderFlights();
   renderAirports();
   renderAircrafts();
-  renderPeople();
-  initWeatherForm();
+  renderPassengers();
+  renderMonitor();
 
   // Simulated Clock & Event Logs
   if (STATE.currentTime) $("#sim-now").textContent = STATE.currentTime;
   renderLog();
   initCreateForm();
 
-  // Render Map elements (Airports, flight routes, active planes)
-  updateMap();
+  // Đặt vé & quản lý tài khoản
+  initBookingForm();
+  renderTickets();
+  if (isRole("Admin")) {
+    setOpts("#rw-airport", STATE.airports.map((a) => `<option value="${a.code}">${a.code}</option>`).join(""));
+    renderUsers();
+  }
 
   // Initialize Lucide Icons for dynamic content
   lucide.createIcons();
@@ -575,8 +148,8 @@ function renderFlights() {
           <i data-lucide="plane"></i>
         </div>
         <div class="route-node">
-          <span class="route-code">${esc(f.dest)}</span>
-          <span class="route-name">${esc(getAirportName(f.dest))}</span>
+          <span class="route-code"><i data-lucide="map-pin" style="width:12px;height:12px;"></i></span>
+          <span class="route-name">${esc(f.dest)}</span>
         </div>
       </div>
       
@@ -589,23 +162,35 @@ function renderFlights() {
         <span>Máy bay: <b>${esc(f.aircraft) || "(chưa gán)"}</b> · Cổng: <b>${esc(f.gate) || "—"}</b> · Tổ bay: <b>${esc(f.crew) || "—"}</b></span>
       </div>
       <div class="row">
-        <i data-lucide="users" style="width:14px; height:14px;"></i> 
+        <i data-lucide="users" style="width:14px; height:14px;"></i>
         <span>Hành khách: <b>${f.paxCount}</b> · Đã Check-in: <b>${f.checkedIn}</b> · Lên máy bay: <b>${f.boarded}</b></span>
       </div>
-      
+      <div class="row">
+        <i data-lucide="armchair" style="width:14px; height:14px;"></i>
+        <span>Ghế trống: <b>${f.availableSeats >= 0 ? f.availableSeats : "—"}</b>${f.capacity ? " / " + f.capacity : ""}</span>
+      </div>
+
       ${f.note ? `
         <div class="row warn-text" style="background: rgba(239, 68, 68, 0.08); padding: 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.12); margin-top: 10px;">
-          <i data-lucide="alert-circle" style="width:14px; height:14px; flex-shrink: 0;"></i> 
+          <i data-lucide="alert-circle" style="width:14px; height:14px; flex-shrink: 0;"></i>
           <span>${esc(f.note)}</span>
         </div>` : ""}
-      
+
       <div class="ops">
+        ${isRole("Admin", "Staff") ? `
         <button class="btn btn-sm" onclick="doAdvance('${f.code}')">
           <i data-lucide="chevron-right"></i> Tiến trạng thái
         </button>
         <button class="btn btn-sm btn-warn" onclick="openModal('${f.code}')">
           <i data-lucide="settings"></i> Thao tác chuyến
         </button>
+        <button class="btn btn-sm btn-warn" onclick="doDeleteFlight('${f.code}')">
+          <i data-lucide="trash-2"></i> Xoá
+        </button>` : ""}
+        ${can("booking") ? `
+        <button class="btn btn-sm" onclick="bookFromFlight('${f.code}')">
+          <i data-lucide="ticket"></i> Mua vé
+        </button>` : ""}
       </div>
     </div>`;
   }).join("");
@@ -613,6 +198,13 @@ function renderFlights() {
 
 async function doAdvance(code) {
   const r = await api("/api/flight/advance", { code });
+  toast(r.message, !r.ok);
+  await load();
+}
+
+async function doDeleteFlight(code) {
+  if (!confirm("Xoá chuyến bay " + code + "? Mọi vé của chuyến sẽ bị huỷ.")) return;
+  const r = await api("/api/flight/delete", { code });
   toast(r.message, !r.ok);
   await load();
 }
@@ -646,7 +238,9 @@ function renderAirports() {
           <span>${esc(a.note)}</span>
         </div>
         <div class="row"><i data-lucide="arrow-right-left" style="width:14px; height:14px;"></i> Runway dài nhất: <b>${a.longestRunway}m</b></div>
-        <div class="row"><i data-lucide="route" style="width:14px; height:14px;"></i> Đường băng: ${a.runways.map((r) => `<b>${esc(r.code)}</b> (${r.length}m)`).join(", ")}</div>
+        <div class="row" style="align-items: flex-start;"><i data-lucide="route" style="width:14px; height:14px; margin-top:3px;"></i>
+          <span>Đường băng: ${a.runways.map((r) => `<b>${esc(r.code)}</b> (${r.length}m)${isRole("Admin") ? ` <a class="rw-del" title="Xoá đường băng" onclick="doDeleteRunway('${esc(a.code)}','${esc(r.code)}')">✕</a>` : ""}`).join(", ") || "—"}</span>
+        </div>
         <div class="row" style="margin-top:14px; font-weight:600; color:var(--txt); border-top: 1px solid rgba(255,255,255,0.05); padding-top:12px;">
           <i data-lucide="door-open" style="width:14px; height:14px;"></i> Cổng ra máy bay (${a.gates.length})
         </div>
@@ -657,6 +251,7 @@ function renderAirports() {
 
 // ---------- Máy bay ----------
 function renderAircrafts() {
+  const admin = isRole("Admin");
   $("#aircrafts-table tbody").innerHTML = STATE.aircrafts.map((a) => `
     <tr>
       <td><b>${esc(a.registration)}</b></td>
@@ -666,82 +261,182 @@ function renderAircrafts() {
       <td>${a.requiredRunway}m</td>
       <td>${a.turnaround}'</td>
       <td><span class="badge checkin">${esc(a.preferredGate)}</span></td>
+      <td>${admin ? `<button class="btn btn-sm btn-warn" onclick="doDeleteAircraft('${esc(a.registration)}')"><i data-lucide="trash-2"></i></button>` : ""}</td>
     </tr>`).join("");
+  lucide.createIcons();
 }
 
-// ---------- Nhân sự + hành khách ----------
+async function doAddAircraft() {
+  const r = await api("/api/aircraft/create", {
+    category: $("#ac-category").value,
+    reg: $("#ac-reg").value.trim(),
+    model: $("#ac-model").value.trim(),
+    capacity: $("#ac-capacity").value,
+  });
+  toast(r.message, !r.ok);
+  if (r.ok) { $("#ac-reg").value = ""; $("#ac-model").value = ""; $("#ac-capacity").value = ""; }
+  await load();
+}
+
+async function doDeleteAircraft(reg) {
+  if (!confirm("Xoá máy bay " + reg + "?")) return;
+  const r = await api("/api/aircraft/delete", { reg });
+  toast(r.message, !r.ok);
+  await load();
+}
+
+async function doAddRunway() {
+  const r = await api("/api/runway/create", {
+    airport: $("#rw-airport").value,
+    code: $("#rw-code").value.trim(),
+    length: $("#rw-length").value,
+  });
+  toast(r.message, !r.ok);
+  if (r.ok) { $("#rw-code").value = ""; $("#rw-length").value = ""; }
+  await load();
+}
+
+async function doDeleteRunway(airport, code) {
+  if (!confirm("Xoá đường băng " + code + " tại " + airport + "?")) return;
+  const r = await api("/api/runway/delete", { airport, code });
+  toast(r.message, !r.ok);
+  await load();
+}
+
+// ---------- Hành khách ----------
 function checkMark(val) {
-  return val 
-    ? `<span style="color:var(--green); font-weight:bold; font-size:15px;"><i data-lucide="check-circle-2" style="width:16px; height:16px; display:inline-block; vertical-align:middle;"></i></span>` 
+  return val
+    ? `<span style="color:var(--green); font-weight:bold; font-size:15px;"><i data-lucide="check-circle-2" style="width:16px; height:16px; display:inline-block; vertical-align:middle;"></i></span>`
     : `<span style="color:var(--muted); font-size:15px;"><i data-lucide="minus" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i></span>`;
 }
 
-function renderPeople() {
-  $("#pilots-table tbody").innerHTML = STATE.pilots.map((p) => `
+// Nhãn hành trình của một hành khách theo trạng thái.
+function journeyBadge(p) {
+  if (p.boarded) return `<span class="badge completed">Đã lên máy bay</span>`;
+  if (p.checkedIn) return `<span class="badge boarding">Đã check-in</span>`;
+  if (p.flight) return `<span class="badge checkin">Đã đặt chỗ</span>`;
+  return `<span class="badge scheduled">Chưa đặt chỗ</span>`;
+}
+
+let paxSearchTerm = "";
+function renderPassengers() {
+  const tbody = $("#passengers-table tbody");
+  if (!tbody) return;
+  const term = paxSearchTerm.trim().toLowerCase();
+  const list = STATE.passengers.filter((p) => {
+    if (!term) return true;
+    return [p.id, p.name, p.passport, p.flight]
+      .some((v) => String(v || "").toLowerCase().includes(term));
+  });
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="hint">Không có hành khách khớp.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map((p) => `
     <tr>
       <td><b>${esc(p.id)}</b></td>
       <td>${esc(p.name)}</td>
-      <td>${p.age}</td>
-      <td><span class="badge scheduled">${esc(p.base)}</span></td>
-      <td>${esc(p.certs).split(';').map(c => `<span class="badge checkin" style="margin-right:2px; font-size:9px; padding:2px 6px;">${c}</span>`).join('') || "—"}</td>
-      <td><b>${p.monthlyHours}h</b></td>
-    </tr>`).join("");
-    
-  $("#ground-table tbody").innerHTML = STATE.ground.map((g) => `
-    <tr>
-      <td><b>${esc(g.id)}</b></td>
-      <td>${esc(g.name)}</td>
-      <td><span class="badge scheduled">${esc(g.base)}</span></td>
-      <td><span class="badge checkin">${esc(g.department)}</span></td>
-    </tr>`).join("");
-    
-  $("#passengers-table tbody").innerHTML = STATE.passengers.map((p) => `
-    <tr>
-      <td><b>${esc(p.id)}</b></td>
-      <td>${esc(p.name)}</td>
-      <td><code>${esc(p.passport)}</code></td>
+      <td><code>${esc(p.passport) || "—"}</code></td>
       <td><b>${esc(p.flight) || "—"}</b></td>
       <td><span class="badge boarding">${esc(p.seat) || "—"}</span></td>
-      <td>${checkMark(p.checkedIn)}</td>
-      <td>${checkMark(p.boarded)}</td>
+      <td>${journeyBadge(p)}</td>
       <td class="${p.bagOverweight ? "warn-text" : ""}">
         <i data-lucide="luggage" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>
         ${p.bagPieces} kiện / ${p.bagWeight}kg ${p.bagOverweight ? " ⚠" : ""}
       </td>
     </tr>`).join("");
+  lucide.createIcons();
 }
 
-// ---------- Weather Form Initialization ----------
-function initWeatherForm() {
-  const select = $("#w-airport");
-  if (!select || !STATE) return;
-  const currentVal = select.value;
-  select.innerHTML = STATE.airports.map(a => `<option value="${a.code}">${a.code} — ${a.name}</option>`).join('');
-  if (currentVal && STATE.airports.some(a => a.code === currentVal)) {
-    select.value = currentVal;
+// ---------- Giám sát hành khách: cảnh báo + theo dõi theo chuyến ----------
+// Số phút từ thời gian mô phỏng tới giờ khởi hành của chuyến (âm = đã qua giờ).
+function minutesToDeparture(f) {
+  const parse = (s) => {
+    if (!s) return null;
+    const [d, t] = s.split(" ");
+    if (!d || !t) return null;
+    const [Y, M, D] = d.split("-").map(Number);
+    const [h, m] = t.split(":").map(Number);
+    return new Date(Y, (M || 1) - 1, D || 1, h || 0, m || 0);
+  };
+  const now = parse(STATE.currentTime);
+  const dep = parse(f.departure);
+  if (!now || !dep) return null;
+  return Math.round((dep - now) / 60000);
+}
+
+function renderMonitor() {
+  // ----- Cảnh báo -----
+  const alerts = [];
+  const activeFlights = STATE.flights.filter(
+    (f) => f.status !== "Completed" && f.status !== "Cancelled");
+
+  for (const f of activeFlights) {
+    const mins = minutesToDeparture(f);
+    // Khách chưa check-in khi sắp tới giờ bay (<=60') và chuyến chưa cất cánh.
+    const notReady = ["Scheduled", "CheckIn", "Check-in", "Boarding", "Delayed"].includes(f.status);
+    if (mins !== null && mins >= 0 && mins <= 60 && notReady) {
+      const notCheckedIn = f.paxCount - f.checkedIn;
+      if (notCheckedIn > 0) {
+        alerts.push({ level: "warn", icon: "clock-alert",
+          text: `Chuyến <b>${esc(f.code)}</b> còn ${mins}' tới giờ bay nhưng <b>${notCheckedIn}</b> khách chưa check-in.` });
+      }
+    }
+    // Chuyến gần đầy / hết ghế.
+    if (f.availableSeats === 0) {
+      alerts.push({ level: "warn", icon: "users",
+        text: `Chuyến <b>${esc(f.code)}</b> đã <b>hết ghế</b> (${f.capacity}/${f.capacity}).` });
+    } else if (f.availableSeats > 0 && f.capacity > 0 && f.availableSeats <= Math.max(1, Math.round(f.capacity * 0.1))) {
+      alerts.push({ level: "info", icon: "users",
+        text: `Chuyến <b>${esc(f.code)}</b> sắp đầy — còn <b>${f.availableSeats}</b> ghế.` });
+    }
   }
-  
-  const now = new Date();
-  const startInput = $("#w-start");
-  const endInput = $("#w-end");
-  
-  if (startInput && !startInput.value) {
-    const formatDateTime = (d) => {
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    
-    const tomorrowStart = new Date(now);
-    tomorrowStart.setDate(now.getDate() + 1);
-    tomorrowStart.setHours(8, 0, 0, 0);
-    
-    const tomorrowEnd = new Date(now);
-    tomorrowEnd.setDate(now.getDate() + 1);
-    tomorrowEnd.setHours(12, 0, 0, 0);
-    
-    startInput.value = formatDateTime(tomorrowStart);
-    endInput.value = formatDateTime(tomorrowEnd);
+  // Hành khách hành lý quá cân.
+  const overweight = STATE.passengers.filter((p) => p.bagOverweight && p.flight);
+  for (const p of overweight) {
+    alerts.push({ level: "info", icon: "luggage",
+      text: `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) hành lý quá cân: ${p.bagWeight}kg.` });
   }
+
+  const alertsBox = $("#alerts-list");
+  if (alertsBox) {
+    alertsBox.innerHTML = alerts.length
+      ? alerts.map((a) => `
+        <div class="alert ${a.level}">
+          <i data-lucide="${a.icon}"></i> <span>${a.text}</span>
+        </div>`).join("")
+      : `<div class="alert ok"><i data-lucide="check-circle-2"></i> <span>Không có cảnh báo. Mọi chuyến đang ổn định.</span></div>`;
+  }
+
+  // ----- Theo dõi theo chuyến / cổng -----
+  const box = $("#monitor-list");
+  if (box) {
+    const monitored = activeFlights;
+    box.innerHTML = monitored.length
+      ? monitored.map((f) => {
+          const waiting = f.paxCount - f.checkedIn;
+          const pct = f.capacity ? Math.round((f.paxCount / f.capacity) * 100) : 0;
+          return `
+          <div class="card monitor-card">
+            <h3>
+              <span class="card-title-left"><i data-lucide="plane-takeoff" style="color:var(--accent);"></i> <b>${esc(f.code)}</b> → ${esc(f.dest)}</span>
+              <span class="${statusClass(f.status)}">${esc(f.status)}</span>
+            </h3>
+            <div class="row"><i data-lucide="door-open" style="width:14px;height:14px;"></i> Cổng: <b>${esc(f.gate) || "—"}</b> · Khởi hành: <b>${esc(f.departure) || "—"}</b></div>
+            <div class="monitor-stats">
+              <div class="mstat"><span class="mstat-num">${f.paxCount}</span><span class="mstat-lbl">Đã đặt</span></div>
+              <div class="mstat"><span class="mstat-num">${f.checkedIn}</span><span class="mstat-lbl">Check-in</span></div>
+              <div class="mstat"><span class="mstat-num">${f.boarded}</span><span class="mstat-lbl">Đã lên</span></div>
+              <div class="mstat ${waiting > 0 ? 'warn-text' : ''}"><span class="mstat-num">${waiting}</span><span class="mstat-lbl">Chờ check-in</span></div>
+              <div class="mstat"><span class="mstat-num">${f.availableSeats >= 0 ? f.availableSeats : "—"}</span><span class="mstat-lbl">Ghế trống</span></div>
+            </div>
+            <div class="loadbar"><div class="loadbar-fill" style="width:${pct}%;"></div></div>
+            <div class="row" style="font-size:11px; color:var(--muted);">Lấp đầy ${pct}% (${f.paxCount}/${f.capacity || "?"})</div>
+          </div>`;
+        }).join("")
+      : `<p class="hint"><i data-lucide="inbox"></i> Không có chuyến đang hoạt động để giám sát.</p>`;
+  }
+  lucide.createIcons();
 }
 
 // ---------- Modal thao tác ----------
@@ -954,18 +649,13 @@ function setOpts(sel, html) {
 
 function initCreateForm() {
   if (!STATE) return;
-  const apOpts = STATE.airports.map((a) =>
-    `<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join("");
-  setOpts("#c-origin", apOpts);
-  setOpts("#c-dest", apOpts);
+  // Sân bay đi là sân bay nhà (chỉ 1) — chọn sẵn, đích là thành phố nhập tay.
+  setOpts("#c-origin", STATE.airports.map((a) =>
+    `<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join(""));
   setOpts("#c-aircraft", `<option value="">(chưa gán)</option>` +
     STATE.aircrafts.map((a) =>
       `<option value="${a.registration}">${a.registration} · ${esc(a.category)}</option>`).join(""));
-  setOpts("#c-crew", `<option value="">(chưa gán)</option>` +
-    STATE.crews.map((c) => `<option value="${c.id}">${c.id}</option>`).join(""));
   setOpts("#c-gate", `<option value="">Tự động</option>`);
-  setOpts("#c-pax", STATE.passengers.map((p) =>
-    `<option value="${p.id}">${p.id} · ${esc(p.name)}</option>`).join(""));
 }
 
 async function doCreateFlight() {
@@ -973,7 +663,7 @@ async function doCreateFlight() {
   const r = await api("/api/flight/create", {
     code,
     origin: $("#c-origin").value,
-    dest: $("#c-dest").value,
+    dest: $("#c-dest").value.trim(),
     departure: $("#c-dep").value.replace("T", " "),
     arrival: $("#c-arr").value.replace("T", " "),
   });
@@ -981,16 +671,14 @@ async function doCreateFlight() {
 
   const msgs = [r.message];
   const reg = $("#c-aircraft").value;
-  const crewId = $("#c-crew").value;
-  
-  if (reg) msgs.push((await api("/api/flight/assign-aircraft", { code, reg })).message);
-  if (reg && crewId) msgs.push((await api("/api/flight/assign-crew", { code, crewId })).message);
-  if (reg) msgs.push((await api("/api/flight/assign-gate", { code, gate: $("#c-gate").value })).message);
-  for (const opt of [...$("#c-pax").selectedOptions])
-    msgs.push((await api("/api/flight/book", { code, pid: opt.value })).message);
+  if (reg) {
+    msgs.push((await api("/api/flight/assign-aircraft", { code, reg })).message);
+    msgs.push((await api("/api/flight/assign-gate", { code, gate: $("#c-gate").value })).message);
+  }
 
   toast(msgs.join(" | "), false);
   $("#c-code").value = "";
+  $("#c-dest").value = "";
   await load();
 }
 
@@ -1022,40 +710,192 @@ function togglePlay() {
 }
 
 // ---------- Tabs + nút toàn cục ----------
+function activateTab(name) {
+  $$(".tab").forEach((x) => x.classList.remove("active"));
+  $$(".panel").forEach((x) => x.classList.remove("active"));
+  const tabBtn = [...$$(".tab")].find((t) => t.dataset.tab === name);
+  if (tabBtn) tabBtn.classList.add("active");
+  const panel = $("#tab-" + name);
+  if (panel) panel.classList.add("active");
+}
+
 function initTabs() {
-  $$(".tab").forEach((t) => t.addEventListener("click", () => {
-    $$(".tab").forEach((x) => x.classList.remove("active"));
-    $$(".panel").forEach((x) => x.classList.remove("active"));
-    t.classList.add("active");
-    $("#tab-" + t.dataset.tab).classList.add("active");
-  }));
+  $$(".tab").forEach((t) => t.addEventListener("click", () => activateTab(t.dataset.tab)));
+}
+
+// ---------- Đăng nhập / phân quyền ----------
+async function doLogin() {
+  const username = $("#login-user").value.trim();
+  const password = $("#login-pass").value;
+  if (!username || !password) { $("#login-error").textContent = "Nhập đủ tên đăng nhập và mật khẩu."; return; }
+  const r = await api("/api/login", { username, password });
+  if (!r.ok) { $("#login-error").textContent = r.message; return; }
+  CURRENT_USER = r.user;
+  localStorage.setItem("skygate_user", JSON.stringify(r.user));
+  $("#login-error").textContent = "";
+  $("#login-pass").value = "";
+  applyAuth();
+}
+
+function doLogout() {
+  stopPlay();
+  localStorage.removeItem("skygate_user");
+  CURRENT_USER = null;
+  applyAuth();
+}
+
+// Áp dụng trạng thái đăng nhập: hiện/ẩn dashboard, ẩn tab/nút theo vai trò.
+function applyAuth() {
+  const logged = !!CURRENT_USER;
+  $("#login-screen").style.display = logged ? "none" : "flex";
+  document.body.classList.toggle("logged-in", logged);
+  if (!logged) return;
+
+  $("#user-info").innerHTML = `<i data-lucide="user"></i> ${esc(CURRENT_USER.fullName)} · <b>${esc(CURRENT_USER.role)}</b>`;
+
+  // Ẩn các tab vai trò không có quyền.
+  $$(".tab").forEach((t) => { t.style.display = can(t.dataset.tab) ? "" : "none"; });
+  // Đồng hồ mô phỏng & reset: chỉ Admin/Staff; logout: luôn hiện.
+  $("#clock-bar").style.display = isRole("Admin", "Staff") ? "" : "none";
+  $("#btn-reset").style.display = isRole("Admin") ? "" : "none";
+  // Công cụ quản trị (thêm máy bay/đường băng): chỉ Admin.
+  $$(".admin-only").forEach((el) => { el.style.display = isRole("Admin") ? "" : "none"; });
+
+  // Chọn tab hợp lệ đầu tiên.
+  const firstTab = [...$$(".tab")].find((t) => t.style.display !== "none");
+  if (firstTab) activateTab(firstTab.dataset.tab);
+
+  lucide.createIcons();
+  load();
+}
+
+// ---------- Đặt vé ----------
+function initBookingForm() {
+  if (!STATE) return;
+  const opts = STATE.flights
+    .filter((f) => f.availableSeats > 0 && f.status !== "Cancelled" && f.status !== "Completed")
+    .map((f) => `<option value="${f.code}">${f.code} · ${esc(f.origin)}→${esc(f.dest)} · còn ${f.availableSeats} ghế</option>`)
+    .join("");
+  setOpts("#t-flight", opts || `<option value="">(không có chuyến còn ghế)</option>`);
+}
+
+async function doBookTicket() {
+  const code = $("#t-flight").value;
+  const passengerName = $("#t-name").value.trim();
+  if (!code) { toast("Chưa chọn chuyến bay.", true); return; }
+  if (!passengerName) { toast("Nhập tên hành khách.", true); return; }
+  const r = await api("/api/ticket/book", { code, passengerName });
+  toast(r.message, !r.ok);
+  if (r.ok) $("#t-name").value = "";
+  await load();
+}
+
+// Bấm "Mua vé" trên thẻ chuyến bay: nhảy sang tab Đặt vé và chọn sẵn chuyến.
+function bookFromFlight(code) {
+  activateTab("booking");
+  const sel = $("#t-flight");
+  if (sel && [...sel.options].some((o) => o.value === code)) sel.value = code;
+  $("#t-name").focus();
+}
+
+async function doCancelTicket(ticketId) {
+  if (!confirm("Huỷ vé " + ticketId + "?")) return;
+  const r = await api("/api/ticket/cancel", { ticketId });
+  toast(r.message, !r.ok);
+  await load();
+}
+
+function renderTickets() {
+  const tbody = $("#tickets-table tbody");
+  if (!tbody) return;
+  let list = STATE.tickets || [];
+  // Customer chỉ thấy vé của mình; Staff/Admin thấy tất cả.
+  if (isRole("Customer")) {
+    list = list.filter((t) => t.owner === CURRENT_USER.username);
+    $("#tickets-title").textContent = "Vé của tôi";
+  } else {
+    $("#tickets-title").textContent = "Tất cả vé đã bán";
+  }
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="hint">Chưa có vé.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map((t) => `
+    <tr>
+      <td><b>${esc(t.ticketId)}</b></td>
+      <td>${esc(t.passengerName)}</td>
+      <td>${esc(t.flight)}</td>
+      <td>${esc(t.owner)}</td>
+      <td><button class="btn btn-sm btn-warn" onclick="doCancelTicket('${t.ticketId}')"><i data-lucide="x"></i> Huỷ</button></td>
+    </tr>`).join("");
+  lucide.createIcons();
+}
+
+// ---------- Quản lý tài khoản (Admin) ----------
+async function doAddUser() {
+  const r = await api("/api/user/create", {
+    role: $("#u-role").value,
+    username: $("#u-username").value.trim(),
+    password: $("#u-password").value,
+    fullName: $("#u-fullname").value.trim(),
+  });
+  toast(r.message, !r.ok);
+  if (r.ok) { $("#u-username").value = ""; $("#u-password").value = ""; $("#u-fullname").value = ""; }
+  await renderUsers();
+}
+
+async function doDeleteUser(username) {
+  if (!confirm("Xoá tài khoản " + username + "?")) return;
+  const r = await api("/api/user/delete", { username });
+  toast(r.message, !r.ok);
+  await renderUsers();
+}
+
+async function renderUsers() {
+  const tbody = $("#users-table tbody");
+  if (!tbody || !isRole("Admin")) return;
+  const r = await api("/api/users?actor=" + encodeURIComponent(CURRENT_USER.username));
+  const list = (r && r.users) || [];
+  tbody.innerHTML = list.map((u) => `
+    <tr>
+      <td><b>${esc(u.username)}</b></td>
+      <td>${esc(u.fullName)}</td>
+      <td>${esc(u.role)}</td>
+      <td><button class="btn btn-sm btn-warn" onclick="doDeleteUser('${esc(u.username)}')"><i data-lucide="trash-2"></i> Xoá</button></td>
+    </tr>`).join("");
+  lucide.createIcons();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  initMap();
   initTabs();
-  
+
+  // Đăng nhập / đăng xuất
+  loadUser();
+  $("#btn-login").addEventListener("click", doLogin);
+  $("#login-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+  $("#login-user").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+  $("#btn-logout").addEventListener("click", doLogout);
+
+  // Đặt vé & quản lý tài khoản & hạ tầng (Admin)
+  $("#btn-book").addEventListener("click", doBookTicket);
+  $("#btn-adduser").addEventListener("click", doAddUser);
+  $("#btn-addaircraft").addEventListener("click", doAddAircraft);
+  $("#btn-addrunway").addEventListener("click", doAddRunway);
+
+  // Tìm kiếm hành khách (lọc tại chỗ, không gọi lại server).
+  $("#pax-search").addEventListener("input", (e) => {
+    paxSearchTerm = e.target.value;
+    if (STATE) renderPassengers();
+  });
+
   $("#btn-reload").addEventListener("click", load);
   $("#modal-close").addEventListener("click", closeModal);
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
-  
+
   $("#btn-reset").addEventListener("click", async () => {
     if (!confirm("Nạp lại dữ liệu mẫu? Thao tác hiện tại sẽ mất.")) return;
     stopPlay();
     const r = await api("/api/reset", {});
-    toast(r.message, !r.ok);
-    await load();
-  });
-
-  $("#btn-weather").addEventListener("click", async () => {
-    const startVal = $("#w-start").value.replace("T", " ");
-    const endVal = $("#w-end").value.replace("T", " ");
-    const r = await api("/api/weather", {
-      airport: $("#w-airport").value,
-      start: startVal,
-      end: endVal,
-      cancel: $("#w-cancel").checked ? "1" : "0",
-    });
     toast(r.message, !r.ok);
     await load();
   });
@@ -1071,5 +911,6 @@ window.addEventListener("DOMContentLoaded", () => {
     renderLog();
   }));
 
-  load();
+  // Hiện dashboard nếu đã đăng nhập, ngược lại hiện màn hình đăng nhập.
+  applyAuth();
 });

@@ -6,12 +6,14 @@
 #include <vector>
 
 #include "../aircraft/Aircraft.h"
+#include "../auth/User.h"
 #include "../common/DateTime.h"
 #include "../common/Enums.h"
 #include "../common/OpResult.h"
 #include "../operations/Airport.h"
 #include "../operations/Crew.h"
 #include "../operations/Flight.h"
+#include "../operations/Ticket.h"
 #include "../people/GroundStaff.h"
 #include "../people/Passenger.h"
 #include "../people/Pilot.h"
@@ -98,6 +100,33 @@ public:
     std::vector<std::string> validateCrewForFlight(const Flight& flight) const;
     void setMarkEmergency(const std::string& flightCode, bool value);
 
+    // ===================== Xoá (dành cho Admin) ============================
+    OpResult deleteAircraft(const std::string& registration);
+    OpResult deleteRunway(const std::string& airportCode, const std::string& runwayCode);
+    OpResult deleteFlight(const std::string& flightCode);
+
+    // ===================== Tài khoản người dùng (Admin/Staff/Customer) =====
+    OpResult addUser(const std::string& role, const std::string& username,
+                     const std::string& password, const std::string& fullName);
+    OpResult deleteUser(const std::string& username);
+    std::shared_ptr<auth::User> findUser(const std::string& username);
+    // Trả về user nếu đúng mật khẩu, nullptr nếu sai.
+    std::shared_ptr<auth::User> authenticate(const std::string& username,
+                                             const std::string& password);
+    const std::vector<std::shared_ptr<auth::User>>& users() const { return users_; }
+
+    // =============================== Vé (Ticket) ===========================
+    // Số ghế còn trống của một chuyến = sức chứa máy bay - số hành khách đã đặt.
+    // Trả về -1 nếu chuyến chưa gán máy bay.
+    int availableSeats(const std::string& flightCode);
+    // Customer mua vé: tạo Passenger + Ticket, giảm ghế trống của chuyến.
+    OpResult bookTicket(const std::string& ownerUsername, const std::string& flightCode,
+                        const std::string& passengerName);
+    // Huỷ vé: gỡ hành khách khỏi chuyến (trả ghế) và xoá vé.
+    OpResult cancelTicket(const std::string& ticketId, const std::string& requesterUsername);
+    std::shared_ptr<Ticket> findTicket(const std::string& ticketId);
+    const std::vector<std::shared_ptr<Ticket>>& tickets() const { return tickets_; }
+
     // ===================== Đồng hồ mô phỏng & nhật ký (mở rộng) ============
     const DateTime& currentTime() const { return simulationTime_; }
     const std::vector<LogEntry>& eventLog() const { return eventLog_; }
@@ -125,6 +154,8 @@ public:
 
     // Nạp dữ liệu mẫu (4 sân bay, máy bay, phi công... theo requirements).
     void seedDemoData();
+    // Tạo 3 tài khoản đăng nhập mặc định (admin/staff/customer) nếu chưa có.
+    void seedDefaultAccounts();
 
     // Thống kê nhanh.
     std::string summary() const;
@@ -146,6 +177,9 @@ private:
     std::vector<std::shared_ptr<Passenger>> passengers_;
     std::vector<std::shared_ptr<Crew>> crews_;
     std::vector<std::shared_ptr<Flight>> flights_;
+    std::vector<std::shared_ptr<auth::User>> users_;
+    std::vector<std::shared_ptr<Ticket>> tickets_;
+    int ticketCounter_ = 0;  // sinh mã vé tăng dần (TK0001, TK0002, ...)
 
     std::vector<std::string> departureQueue_;  // mã chuyến chờ cất cánh
     std::vector<std::string> arrivalQueue_;     // mã chuyến chờ hạ cánh

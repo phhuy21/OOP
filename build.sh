@@ -5,7 +5,9 @@ set -e
 
 CXX="${CXX:-g++}"
 CXXFLAGS="-std=c++17 -Wall -Wextra -O2"
-SRC=$(find src -name '*.cpp')
+# Console app dùng src/main.cpp. Loại web_main.cpp (định nghĩa main() riêng cho
+# web server + cần winsock) để không trùng symbol main / thiếu thư viện socket.
+SRC=$(find src -name '*.cpp' ! -name 'web_main.cpp')
 OUT="skygate"
 
 echo "Đang biên dịch ${OUT} ..."

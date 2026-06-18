@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 #include "../aircraft/AircraftFactory.h"
@@ -184,9 +185,11 @@ OpResult AirportSystem::createFlight(const std::string& code, const std::string&
                                      const std::string& arrival) {
     if (code.empty()) return OpResult::failure("Mã chuyến bay không được rỗng.");
     if (findFlight(code)) return OpResult::failure("Chuyến bay đã tồn tại: " + code);
+    // Mô hình 1 sân bay nhà: sân bay đi phải là sân bay ta vận hành; điểm đến
+    // chỉ là tên thành phố (không cần là sân bay trong hệ thống).
     if (!findAirport(origin)) return OpResult::failure("Sân bay đi không tồn tại: " + origin);
-    if (!findAirport(dest)) return OpResult::failure("Sân bay đến không tồn tại: " + dest);
-    if (origin == dest) return OpResult::failure("Sân bay đi và đến phải khác nhau.");
+    if (dest.empty()) return OpResult::failure("Điểm đến không được rỗng.");
+    if (origin == dest) return OpResult::failure("Điểm đi và đến phải khác nhau.");
 
     DateTime dep = DateTime::parse(departure);
     DateTime arr = DateTime::parse(arrival);
@@ -212,17 +215,11 @@ OpResult AirportSystem::assignAircraft(const std::string& flightCode,
     if (!ac) return OpResult::failure("Không tìm thấy máy bay " + registration);
 
     Airport* origin = findAirport(f->originCode());
-    Airport* dest = findAirport(f->destCode());
-    if (!origin || !dest) return OpResult::failure("Thiếu sân bay đi/đến cho chuyến.");
+    if (!origin) return OpResult::failure("Thiếu sân bay đi cho chuyến.");
 
-    // Quy tắc đường băng: cả sân bay đi và đến phải có đường băng đủ dài.
+    // Quy tắc đường băng: sân bay nhà phải có đường băng đủ dài cho máy bay.
     if (!origin->hasRunwayFor(*ac)) {
         return OpResult::failure("Sân bay đi " + origin->code() +
-                                 " không có đường băng đủ dài (cần >= " +
-                                 std::to_string(ac->requiredRunwayLength()) + "m).");
-    }
-    if (!dest->hasRunwayFor(*ac)) {
-        return OpResult::failure("Sân bay đến " + dest->code() +
                                  " không có đường băng đủ dài (cần >= " +
                                  std::to_string(ac->requiredRunwayLength()) + "m).");
     }
@@ -378,6 +375,172 @@ OpResult AirportSystem::cancelFlight(const std::string& flightCode, const std::s
 void AirportSystem::setMarkEmergency(const std::string& flightCode, bool value) {
     auto f = findFlight(flightCode);
     if (f) f->setEmergency(value);
+}
+
+// ===========================================================================
+//  Xoá tài nguyên (dành cho Admin)
+// ===========================================================================
+OpResult AirportSystem::deleteAircraft(const std::string& registration) {
+    auto ac = findAircraft(registration);
+    if (!ac) return OpResult::failure("Không tìm thấy máy bay " + registration);
+    // Không cho xoá nếu đang gán cho một chuyến chưa kết thúc.
+    for (auto& f : flights_) {
+        if (!f->isFinished() && f->aircraft() && f->aircraft()->registration() == registration) {
+            return OpResult::failure("Máy bay đang gán cho chuyến " + f->code() +
+                                     " (chưa kết thúc), không thể xoá.");
+        }
+    }
+    aircrafts_.erase(std::remove(aircrafts_.begin(), aircrafts_.end(), ac), aircrafts_.end());
+    logEvent("Xoá máy bay " + registration + ".");
+    return OpResult::success("Đã xoá máy bay " + registration + ".");
+}
+
+OpResult AirportSystem::deleteRunway(const std::string& airportCode,
+                                     const std::string& runwayCode) {
+    Airport* a = findAirport(airportCode);
+    if (!a) return OpResult::failure("Không tìm thấy sân bay " + airportCode);
+    if (!a->removeRunway(runwayCode))
+        return OpResult::failure("Không tìm thấy đường băng " + runwayCode + " tại " + airportCode);
+    logEvent("Xoá đường băng " + runwayCode + " tại " + airportCode + ".");
+    return OpResult::success("Đã xoá đường băng " + runwayCode + ".");
+}
+
+OpResult AirportSystem::deleteFlight(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+
+    // Giải phóng hành khách & gỡ vé liên quan.
+    for (auto& p : f->passengers()) p->setFlightCode("");
+    tickets_.erase(std::remove_if(tickets_.begin(), tickets_.end(),
+                                  [&](const std::shared_ptr<Ticket>& t) {
+                                      return t->flightCode() == flightCode;
+                                  }),
+                   tickets_.end());
+    // Trả gate và loại khỏi hàng đợi.
+    Airport* origin = findAirport(f->originCode());
+    if (origin) for (auto& g : origin->gates()) g.releaseFlight(flightCode);
+    auto rm = [&](std::vector<std::string>& q) {
+        q.erase(std::remove(q.begin(), q.end(), flightCode), q.end());
+    };
+    rm(departureQueue_);
+    rm(arrivalQueue_);
+
+    flights_.erase(std::remove(flights_.begin(), flights_.end(), f), flights_.end());
+    logEvent("Xoá chuyến bay " + flightCode + ".");
+    return OpResult::success("Đã xoá chuyến bay " + flightCode + ".");
+}
+
+// ===========================================================================
+//  Tài khoản người dùng (Admin / Staff / Customer)
+// ===========================================================================
+OpResult AirportSystem::addUser(const std::string& role, const std::string& username,
+                                const std::string& password, const std::string& fullName) {
+    if (username.empty()) return OpResult::failure("Tên đăng nhập không được rỗng.");
+    if (password.empty()) return OpResult::failure("Mật khẩu không được rỗng.");
+    if (role != "Admin" && role != "Staff" && role != "Customer")
+        return OpResult::failure("Vai trò không hợp lệ: " + role);
+    if (findUser(username)) return OpResult::failure("Tên đăng nhập đã tồn tại: " + username);
+    users_.push_back(auth::makeUser(role, username, password, fullName));
+    logEvent("Thêm tài khoản " + role + " '" + username + "'.");
+    return OpResult::success("Đã tạo tài khoản " + role + " '" + username + "'.");
+}
+
+OpResult AirportSystem::deleteUser(const std::string& username) {
+    auto u = findUser(username);
+    if (!u) return OpResult::failure("Không tìm thấy tài khoản " + username);
+    if (u->role() == "Admin") {
+        int admins = 0;
+        for (auto& x : users_) if (x->role() == "Admin") ++admins;
+        if (admins <= 1) return OpResult::failure("Không thể xoá Admin cuối cùng.");
+    }
+    users_.erase(std::remove(users_.begin(), users_.end(), u), users_.end());
+    logEvent("Xoá tài khoản '" + username + "'.");
+    return OpResult::success("Đã xoá tài khoản " + username + ".");
+}
+
+std::shared_ptr<auth::User> AirportSystem::findUser(const std::string& username) {
+    for (auto& u : users_) if (u->username() == username) return u;
+    return nullptr;
+}
+
+std::shared_ptr<auth::User> AirportSystem::authenticate(const std::string& username,
+                                                        const std::string& password) {
+    auto u = findUser(username);
+    if (u && u->checkPassword(password)) return u;
+    return nullptr;
+}
+
+// ===========================================================================
+//  Vé (Ticket): trọng tâm đặt / huỷ vé theo ghế trống
+// ===========================================================================
+int AirportSystem::availableSeats(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f || !f->aircraft()) return -1;
+    return f->aircraft()->capacity() - static_cast<int>(f->passengers().size());
+}
+
+OpResult AirportSystem::bookTicket(const std::string& ownerUsername,
+                                   const std::string& flightCode,
+                                   const std::string& passengerName) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    if (f->isFinished()) return OpResult::failure("Chuyến bay đã kết thúc/huỷ, không thể đặt vé.");
+    if (passengerName.empty()) return OpResult::failure("Tên hành khách không được rỗng.");
+    if (!f->aircraft())
+        return OpResult::failure("Chuyến chưa gán máy bay nên chưa mở bán vé.");
+    if (static_cast<int>(f->passengers().size()) >= f->aircraft()->capacity())
+        return OpResult::failure("Chuyến đã hết ghế (sức chứa " +
+                                 std::to_string(f->aircraft()->capacity()) + ").");
+
+    // Sinh mã hành khách & mã vé duy nhất.
+    std::string pid;
+    do {
+        std::ostringstream o;
+        o << "PX" << std::setw(5) << std::setfill('0') << (++ticketCounter_ + 10000);
+        pid = o.str();
+    } while (findPassenger(pid));
+    std::ostringstream tk;
+    tk << "TK" << std::setw(4) << std::setfill('0') << ticketCounter_;
+    std::string tid = tk.str();
+
+    passengers_.push_back(std::make_shared<Passenger>(pid, passengerName, 0, "", ""));
+    f->addPassenger(findPassenger(pid));
+    tickets_.push_back(std::make_shared<Ticket>(tid, flightCode, pid, passengerName, ownerUsername));
+    logEvent(flightCode + ": bán vé " + tid + " cho '" + passengerName + "' (" + ownerUsername + ").");
+    return OpResult::success("Đã mua vé " + tid + " cho '" + passengerName + "' trên chuyến " +
+                             flightCode + ". Ghế còn lại: " +
+                             std::to_string(availableSeats(flightCode)) + ".");
+}
+
+OpResult AirportSystem::cancelTicket(const std::string& ticketId,
+                                     const std::string& requesterUsername) {
+    auto t = findTicket(ticketId);
+    if (!t) return OpResult::failure("Không tìm thấy vé " + ticketId);
+    // Customer chỉ huỷ vé của mình; Staff/Admin (chuỗi rỗng = bỏ qua kiểm tra) huỷ được mọi vé.
+    if (!requesterUsername.empty() && t->ownerUsername() != requesterUsername) {
+        auto u = findUser(requesterUsername);
+        bool privileged = u && (u->role() == "Admin" || u->role() == "Staff");
+        if (!privileged) return OpResult::failure("Bạn chỉ có thể huỷ vé của chính mình.");
+    }
+
+    std::string flightCode = t->flightCode();
+    std::string pid = t->passengerId();
+    auto f = findFlight(flightCode);
+    if (f) f->removePassenger(pid);
+    // Hành khách được tạo riêng cho vé -> xoá luôn khỏi hệ thống.
+    passengers_.erase(std::remove_if(passengers_.begin(), passengers_.end(),
+                                     [&](const std::shared_ptr<Passenger>& p) {
+                                         return p->id() == pid;
+                                     }),
+                      passengers_.end());
+    tickets_.erase(std::remove(tickets_.begin(), tickets_.end(), t), tickets_.end());
+    logEvent(flightCode + ": huỷ vé " + ticketId + ".");
+    return OpResult::success("Đã huỷ vé " + ticketId + " trên chuyến " + flightCode + ".");
+}
+
+std::shared_ptr<Ticket> AirportSystem::findTicket(const std::string& ticketId) {
+    for (auto& t : tickets_) if (t->ticketId() == ticketId) return t;
+    return nullptr;
 }
 
 // ===========================================================================
@@ -688,6 +851,20 @@ OpResult AirportSystem::saveAll(const std::string& dir) {
         o << buildRecord({"DEP", joinList(departureQueue_)}) << "\n";
         o << buildRecord({"ARR", joinList(arrivalQueue_)}) << "\n";
     }
+    // users (tài khoản đăng nhập)
+    {
+        std::ofstream o = open("users.txt");
+        for (auto& u : users_)
+            o << buildRecord({u->role(), u->username(), u->password(), u->fullName()}) << "\n";
+    }
+    // tickets (vé đã bán)
+    {
+        std::ofstream o = open("tickets.txt");
+        o << buildRecord({"COUNTER", std::to_string(ticketCounter_)}) << "\n";
+        for (auto& t : tickets_)
+            o << buildRecord({t->ticketId(), t->flightCode(), t->passengerId(),
+                              t->passengerName(), t->ownerUsername()}) << "\n";
+    }
 
     return OpResult::success("Đã lưu toàn bộ dữ liệu vào thư mục '" + dir + "'.");
 }
@@ -698,6 +875,7 @@ OpResult AirportSystem::loadAll(const std::string& dir) {
     // Xoá dữ liệu hiện tại.
     airports_.clear(); aircrafts_.clear(); pilots_.clear(); ground_.clear();
     passengers_.clear(); crews_.clear(); flights_.clear();
+    users_.clear(); tickets_.clear(); ticketCounter_ = 0;
     departureQueue_.clear(); arrivalQueue_.clear();
 
     auto path = [&](const std::string& f) { return dir + "/" + f; };
@@ -787,6 +965,18 @@ OpResult AirportSystem::loadAll(const std::string& dir) {
             else if (r[0] == "ARR") arrivalQueue_ = splitList(r[1]);
         }
     }
+    for (auto& line : readLines(path("users.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 4) users_.push_back(auth::makeUser(r[0], r[1], r[2], r[3]));
+    }
+    for (auto& line : readLines(path("tickets.txt"))) {
+        auto r = parseRecord(line);
+        if (r.size() >= 2 && r[0] == "COUNTER") {
+            ticketCounter_ = utils::toInt(r[1]);
+        } else if (r.size() >= 5) {
+            tickets_.push_back(std::make_shared<Ticket>(r[0], r[1], r[2], r[3], r[4]));
+        }
+    }
 
     rebuildGateReservations();
     return OpResult::success("Đã đọc dữ liệu từ thư mục '" + dir + "'.");
@@ -812,86 +1002,59 @@ void AirportSystem::rebuildGateReservations() {
 //  Dữ liệu mẫu & thống kê
 // ===========================================================================
 void AirportSystem::seedDemoData() {
-    // Khởi tạo đồng hồ mô phỏng: 06:00 — trước 2 chuyến mẫu (08:00/10:00) để
-    // có thể tua tới và quan sát toàn bộ vòng đời.
+    // Khởi tạo đồng hồ mô phỏng: 06:00 — trước các chuyến mẫu để có thể tua tới
+    // và quan sát toàn bộ vòng đời + hành trình hành khách.
     simulationTime_ = DateTime(2026, 6, 10, 6, 0);
 
-    // --- 4 sân bay theo requirements ---
-    addAirport("PHG", "San bay Quoc te Phuong Hoang", "Trung tam, nhieu loai may bay");
+    // --- 1 sân bay nhà (mô hình quản lý 1 sân bay) ---
+    addAirport("PHG", "San bay Quoc te Phuong Hoang", "San bay nha — trung tam khai thac");
     addRunway("PHG", "PHG-RW1", 3600);
     addRunway("PHG", "PHG-RW2", 3600);
     for (int i = 1; i <= 8; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::DoubleJetBridge);
     for (int i = 9; i <= 15; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::SingleJetBridge);
 
-    addAirport("CLG", "San bay Quoc te Cuu Long", "Than hep va mot so chuyen lon");
-    addRunway("CLG", "CLG-RW1", 2800);
-    addRunway("CLG", "CLG-RW2", 2800);
-    for (int i = 1; i <= 10; ++i) addGate("CLG", "CLG-G" + std::to_string(i), GateType::SingleJetBridge);
-
-    addAirport("HAU", "San bay Dao Hai Au", "Chi may bay nho / canh quat");
-    addRunway("HAU", "HAU-RW1", 1800);
-    for (int i = 1; i <= 3; ++i) addGate("HAU", "HAU-G" + std::to_string(i), GateType::RemoteStand);
-
-    addAirport("MHA", "San bay Thung Lung Muong Hoa", "Vung cao, han che ha tang");
-    addRunway("MHA", "MHA-RW1", 1600);
-    for (int i = 1; i <= 2; ++i) addGate("MHA", "MHA-G" + std::to_string(i), GateType::RemoteStand);
-
-    // --- Máy bay ---
+    // --- Đội máy bay khai thác tại PHG ---
     addAircraft(AircraftCategory::WideBody, "VN-SKY900", "SkyCruiser-900", 360);
     addAircraft(AircraftCategory::WideBody, "VN-HRZ350", "Horizon-350", 320);
     addAircraft(AircraftCategory::NarrowBody, "VN-AERO321", "AeroSwift-321", 200);
     addAircraft(AircraftCategory::NarrowBody, "VN-CLD200", "CloudJet-200", 180);
     addAircraft(AircraftCategory::Turboprop, "VN-TER72", "TerraProp-72", 72);
 
-    // --- Phi công ---
-    addPilot("PLT01", "Nguyen Van An", 42, "0900000001", "PHG");
-    addPilotCertification("PLT01", AircraftCategory::WideBody);
-    addPilotCertification("PLT01", AircraftCategory::NarrowBody);
-    addPilot("PLT02", "Tran Thi Binh", 38, "0900000002", "PHG");
-    addPilotCertification("PLT02", AircraftCategory::NarrowBody);
-    addPilot("PLT03", "Le Quang Cuong", 45, "0900000003", "CLG");
-    addPilotCertification("PLT03", AircraftCategory::NarrowBody);
-    addPilotCertification("PLT03", AircraftCategory::Turboprop);
-    addPilot("PLT04", "Pham Gia Dat", 35, "0900000004", "HAU");
-    addPilotCertification("PLT04", AircraftCategory::Turboprop);
-
-    // --- Nhân viên mặt đất ---
-    addGroundStaff("GS01", "Vo Thi En", 29, "0911000001", "PHG", "Check-in");
-    addGroundStaff("GS02", "Do Van Phong", 31, "0911000002", "PHG", "Boarding");
-    addGroundStaff("GS03", "Bui Thi Giang", 27, "0911000003", "CLG", "Baggage");
-
-    // --- Tổ bay ---
-    createCrew("CRW01");
-    addPilotToCrew("CRW01", "PLT01");
-    addPilotToCrew("CRW01", "PLT02");
-    addGroundToCrew("CRW01", "GS01");
-    addGroundToCrew("CRW01", "GS02");
-
-    createCrew("CRW02");
-    addPilotToCrew("CRW02", "PLT03");
-    addGroundToCrew("CRW02", "GS03");
-
-    // --- Hành khách ---
+    // --- Hành khách mẫu (đã đặt vé sẵn ở các chuyến bên dưới) ---
     addPassenger("PX001", "Hoang Van Hung", 30, "0980000001", "P0001");
     setPassengerBaggage("PX001", 1, 18.0);
     addPassenger("PX002", "Ngo Thi Lan", 25, "0980000002", "P0002");
     setPassengerBaggage("PX002", 3, 55.0);  // vượt mức -> cảnh báo
     addPassenger("PX003", "Dang Van Minh", 40, "0980000003", "P0003");
     setPassengerBaggage("PX003", 2, 40.0);
+    addPassenger("PX004", "Tran Thi Mai", 28, "0980000004", "P0004");
+    setPassengerBaggage("PX004", 1, 12.0);
 
-    // --- Chuyến bay mẫu ---
-    createFlight("SG100", "PHG", "CLG", "2026-06-10 08:00", "2026-06-10 09:30");
+    // --- Chuyến bay mẫu: đều KHỞI HÀNH từ PHG tới các thành phố đích ---
+    createFlight("SG100", "PHG", "TP. Ho Chi Minh", "2026-06-10 08:00", "2026-06-10 09:30");
     assignAircraft("SG100", "VN-AERO321");
-    assignCrew("SG100", "CRW01");
     assignGate("SG100", "");  // tự động
     bookPassenger("SG100", "PX001");
     bookPassenger("SG100", "PX002");
 
-    createFlight("SG200", "HAU", "PHG", "2026-06-10 10:00", "2026-06-10 11:00");
+    createFlight("SG200", "PHG", "Da Nang", "2026-06-10 10:00", "2026-06-10 11:00");
     assignAircraft("SG200", "VN-TER72");
-    assignCrew("SG200", "CRW02");
     assignGate("SG200", "");
     bookPassenger("SG200", "PX003");
+
+    createFlight("SG300", "PHG", "Phu Quoc", "2026-06-10 13:00", "2026-06-10 15:00");
+    assignAircraft("SG300", "VN-SKY900");
+    assignGate("SG300", "");
+    bookPassenger("SG300", "PX004");
+
+    // --- Tài khoản đăng nhập mẫu (3 phân hệ) ---
+    seedDefaultAccounts();
+}
+
+void AirportSystem::seedDefaultAccounts() {
+    if (!findUser("admin"))    addUser("Admin", "admin", "admin123", "Quan tri vien");
+    if (!findUser("staff"))    addUser("Staff", "staff", "staff123", "Nhan vien quay ve");
+    if (!findUser("customer")) addUser("Customer", "customer", "cus123", "Khach hang");
 }
 
 std::string AirportSystem::summary() const {

@@ -30,6 +30,16 @@ public:
 
     // --- Đường băng ---
     void addRunway(const Runway& r) { runways_.push_back(r); }
+    // Xoá đường băng theo mã; trả về true nếu có xoá.
+    bool removeRunway(const std::string& runwayCode) {
+        for (size_t i = 0; i < runways_.size(); ++i) {
+            if (runways_[i].code() == runwayCode) {
+                runways_.erase(runways_.begin() + static_cast<long>(i));
+                return true;
+            }
+        }
+        return false;
+    }
     std::vector<Runway>& runways() { return runways_; }
     const std::vector<Runway>& runways() const { return runways_; }
     int longestRunway() const;  // chiều dài đường băng dài nhất (mét)

@@ -1,5 +1,7 @@
 // SkyGate Web — bọc AirportSystem (C++ OOP) thành REST API + phục vụ web tĩnh.
 // KHÔNG sửa logic nghiệp vụ: chỉ gọi lại các hàm public sẵn có của AirportSystem.
+#include <cstdio>
+#include <initializer_list>
 #include <memory>
 #include <string>
 
@@ -88,6 +90,11 @@ std::string jFlight(const std::shared_ptr<sg::Flight>& f) {
         .num("checkedIn", (long long)f->checkedInCount())
         .num("boarded", (long long)f->boardedCount())
         .num("paxCount", (long long)f->passengers().size())
+        .num("capacity", (long long)(f->aircraft() ? f->aircraft()->capacity() : 0))
+        .num("availableSeats",
+             (long long)(f->aircraft()
+                             ? f->aircraft()->capacity() - (int)f->passengers().size()
+                             : -1))
         .raw("passengers", pax.dump())
         .dump();
 }
@@ -96,8 +103,25 @@ std::string jEvent(const sg::LogEntry& e) {
     return Obj().str("time", e.time).str("text", e.text).dump();
 }
 
+std::string jUser(const std::shared_ptr<sg::auth::User>& u) {
+    Arr menu;
+    for (const auto& m : u->menu()) menu.pushStr(m);
+    return Obj()
+        .str("username", u->username()).str("fullName", u->fullName())
+        .str("role", u->role()).raw("menu", menu.dump())
+        .dump();
+}
+
+std::string jTicket(const std::shared_ptr<sg::Ticket>& t) {
+    return Obj()
+        .str("ticketId", t->ticketId()).str("flight", t->flightCode())
+        .str("pid", t->passengerId()).str("passengerName", t->passengerName())
+        .str("owner", t->ownerUsername())
+        .dump();
+}
+
 std::string fullState(const sg::AirportSystem& s) {
-    Arr airports, aircrafts, pilots, ground, passengers, crews, flights, depQ, arrQ;
+    Arr airports, aircrafts, pilots, ground, passengers, crews, flights, depQ, arrQ, tickets;
     for (const auto& a : s.airports())   airports.push(jAirport(a));
     for (const auto& a : s.aircrafts())  aircrafts.push(jAircraft(a));
     for (const auto& p : s.pilots())     pilots.push(jPilot(p));
@@ -105,6 +129,7 @@ std::string fullState(const sg::AirportSystem& s) {
     for (const auto& p : s.passengers()) passengers.push(jPassenger(p));
     for (const auto& c : s.crews())      crews.push(jCrew(c));
     for (const auto& f : s.flights())    flights.push(jFlight(f));
+    for (const auto& t : s.tickets())    tickets.push(jTicket(t));
     for (const auto& c : s.departureQueue()) depQ.pushStr(c);
     for (const auto& c : s.arrivalQueue())   arrQ.pushStr(c);
     // Nhật ký: render mới nhất trước -> đảo ngược ở đây.
@@ -118,6 +143,7 @@ std::string fullState(const sg::AirportSystem& s) {
         .raw("pilots", pilots.dump()).raw("ground", ground.dump())
         .raw("passengers", passengers.dump()).raw("crews", crews.dump())
         .raw("flights", flights.dump())
+        .raw("tickets", tickets.dump())
         .raw("departureQueue", depQ.dump()).raw("arrivalQueue", arrQ.dump())
         .raw("eventLog", events.dump())
         .dump();
@@ -138,13 +164,38 @@ std::string q(const httplib::Request& req, const char* key) {
 int main(int argc, char** argv) {
     int port = (argc > 1) ? std::atoi(argv[1]) : 8080;
 
+    const std::string kDataDir = "data";
+
     sg::AirportSystem system;
-    system.seedDemoData();  // nạp dữ liệu mẫu theo requirements
+    // Nạp dữ liệu đã lưu nếu có; nếu chưa có thì khởi tạo dữ liệu mẫu rồi lưu lại.
+    if (system.loadAll(kDataDir).ok && !system.airports().empty()) {
+        // Dữ liệu cũ có thể chưa có tài khoản đăng nhập -> bổ sung mặc định.
+        system.seedDefaultAccounts();
+        system.saveAll(kDataDir);
+        std::printf("Da nap du lieu tu thu muc '%s'.\n", kDataDir.c_str());
+    } else {
+        system.seedDemoData();
+        system.saveAll(kDataDir);
+        std::printf("Da khoi tao du lieu mau va luu vao '%s'.\n", kDataDir.c_str());
+    }
 
     httplib::Server svr;
 
     auto sendJson = [](httplib::Response& res, const std::string& body) {
         res.set_content(body, "application/json; charset=utf-8");
+    };
+
+    // Vai trò của tài khoản 'actor' (rỗng nếu không có / không hợp lệ).
+    auto actorRole = [&](const std::string& username) -> std::string {
+        auto u = system.findUser(username);
+        return u ? u->role() : std::string();
+    };
+    // Trả về true nếu actor có một trong các vai trò cho phép.
+    auto hasRole = [&](const std::string& username,
+                       std::initializer_list<const char*> allowed) -> bool {
+        std::string r = actorRole(username);
+        for (const char* a : allowed) if (r == a) return true;
+        return false;
     };
 
     // ===== Đọc toàn bộ trạng thái =====
@@ -215,6 +266,110 @@ int main(int argc, char** argv) {
         system = sg::AirportSystem();
         system.seedDemoData();
         sendJson(res, jResult(sg::OpResult::success("Đã nạp lại dữ liệu mẫu.")));
+    });
+
+    // ===== Đăng nhập =====
+    svr.Post("/api/login", [&](const httplib::Request& req, httplib::Response& res) {
+        auto u = system.authenticate(q(req, "username"), q(req, "password"));
+        if (!u) {
+            sendJson(res, Obj().boolean("ok", false)
+                     .str("message", "Sai tên đăng nhập hoặc mật khẩu.").dump());
+            return;
+        }
+        sendJson(res, Obj().boolean("ok", true)
+                 .str("message", "Đăng nhập thành công.")
+                 .raw("user", jUser(u)).dump());
+    });
+
+    // ===== Quản lý tài khoản (chỉ Admin) =====
+    svr.Get("/api/users", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, Obj().boolean("ok", false).str("message", "Chỉ Admin được xem tài khoản.").dump());
+            return;
+        }
+        Arr arr;
+        for (const auto& u : system.users()) arr.push(jUser(u));
+        sendJson(res, Obj().boolean("ok", true).raw("users", arr.dump()).dump());
+    });
+    svr.Post("/api/user/create", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được tạo tài khoản.")));
+            return;
+        }
+        sendJson(res, jResult(system.addUser(q(req, "role"), q(req, "username"),
+                                             q(req, "password"), q(req, "fullName"))));
+    });
+    svr.Post("/api/user/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được xoá tài khoản.")));
+            return;
+        }
+        sendJson(res, jResult(system.deleteUser(q(req, "username"))));
+    });
+
+    // ===== Vé: mua / huỷ (Customer & Staff & Admin) =====
+    svr.Post("/api/ticket/book", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Customer", "Staff", "Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Bạn không có quyền mua vé.")));
+            return;
+        }
+        sendJson(res, jResult(system.bookTicket(q(req, "actor"), q(req, "code"),
+                                                q(req, "passengerName"))));
+    });
+    svr.Post("/api/ticket/cancel", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Customer", "Staff", "Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Bạn không có quyền huỷ vé.")));
+            return;
+        }
+        sendJson(res, jResult(system.cancelTicket(q(req, "ticketId"), q(req, "actor"))));
+    });
+
+    // ===== Thêm tài nguyên hạ tầng (chỉ Admin) =====
+    svr.Post("/api/aircraft/create", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được thêm máy bay.")));
+            return;
+        }
+        sg::AircraftCategory cat = sg::aircraftCategoryFromString(q(req, "category"));
+        sendJson(res, jResult(system.addAircraft(cat, q(req, "reg"), q(req, "model"),
+                                                 std::atoi(q(req, "capacity").c_str()))));
+    });
+    svr.Post("/api/runway/create", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được thêm đường băng.")));
+            return;
+        }
+        sendJson(res, jResult(system.addRunway(q(req, "airport"), q(req, "code"),
+                                               std::atoi(q(req, "length").c_str()))));
+    });
+
+    // ===== Xoá tài nguyên (chỉ Admin) =====
+    svr.Post("/api/aircraft/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được xoá máy bay.")));
+            return;
+        }
+        sendJson(res, jResult(system.deleteAircraft(q(req, "reg"))));
+    });
+    svr.Post("/api/runway/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được xoá đường băng.")));
+            return;
+        }
+        sendJson(res, jResult(system.deleteRunway(q(req, "airport"), q(req, "code"))));
+    });
+    svr.Post("/api/flight/delete", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin", "Staff"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin/Staff được xoá chuyến bay.")));
+            return;
+        }
+        sendJson(res, jResult(system.deleteFlight(q(req, "code"))));
+    });
+
+    // ===== Tự động lưu file sau mỗi thao tác ghi (POST), trừ đăng nhập =====
+    svr.set_post_routing_handler([&](const httplib::Request& req, httplib::Response&) {
+        if (req.method == "POST" && req.path != "/api/login")
+            system.saveAll(kDataDir);
     });
 
     // ===== Phục vụ web tĩnh =====

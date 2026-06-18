@@ -1,4 +1,0 @@
-PLT01|Nguyen Van An|42|0900000001|PHG|WideBody;NarrowBody|0|
-PLT02|Tran Thi Binh|38|0900000002|PHG|NarrowBody|0|
-PLT03|Le Quang Cuong|45|0900000003|CLG|NarrowBody;Turboprop|0|
-PLT04|Pham Gia Dat|35|0900000004|HAU|Turboprop|0|

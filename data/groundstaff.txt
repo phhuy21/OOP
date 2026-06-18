@@ -1,3 +1,0 @@
-GS01|Vo Thi En|29|0911000001|PHG|Check-in
-GS02|Do Van Phong|31|0911000002|PHG|Boarding
-GS03|Bui Thi Giang|27|0911000003|CLG|Baggage
