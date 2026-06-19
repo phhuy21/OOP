@@ -1,137 +1,125 @@
-# SkyGate — Intelligent Airport Management System
+# SkyGate — Hệ thống Quản lý Sân bay & Đặt vé
 
-Hệ thống mô phỏng quản lý sân bay thông minh (SkyGate) được xây dựng trên nền tảng C++ hướng đối tượng (OOP) ở Backend kết hợp với giao diện Web (HTML/CSS/JS) hiện đại ở Frontend thông qua giao thức truyền tải REST API. Đây là dự án Bài tập lớn hoàn thành môn học Lập trình hướng đối tượng (LTHDT) của Nhóm 5 — Trường Đại học Công Nghệ Kỹ thuật TP.HCM (HCMUTE).
+Hệ thống quản lý sân bay (SkyGate) được xây dựng trên nền tảng **C++ hướng đối tượng (OOP)** ở Backend, kết hợp giao diện **Web (HTML/CSS/JS)** ở Frontend thông qua **REST API**. Đây là Bài tập lớn môn Lập trình hướng đối tượng (LTHDT) của Nhóm 5 — Trường Đại học Công Nghệ Kỹ thuật TP.HCM (HCMUTE).
 
 🔗 **Link trải nghiệm trực tuyến:** [http://159.65.141.209:8888](http://159.65.141.209:8888)
+
+> Tài khoản demo: **admin / admin123** · **staff / staff123** · **customer / cus123**
 
 ---
 
 ## 1. Tổng quan dự án
 
-SkyGate được thiết kế nhằm mô phỏng toàn bộ hoạt động điều hành cốt lõi tại các cảng hàng không. Hệ thống giải quyết các bài toán tối ưu hóa nguồn lực thực tế như phân bổ đường băng, cổng đỗ (gate), quản lý phi hành đoàn (kiểm tra chứng chỉ bay, giới hạn giờ bay), điều phối cất/hạ cánh dưới tác động của thời tiết bất lợi và quản lý vòng đời hành khách từ đặt chỗ, check-in chọn ghế đến ký gửi hành lý.
+SkyGate mô phỏng hoạt động điều hành tại **một sân bay** (sân bay nhà), với **trọng tâm là nghiệp vụ đặt/huỷ vé và giám sát hành khách**. Hệ thống phân tách thành **3 phân hệ người dùng** với quyền hạn khác nhau, quản lý vòng đời chuyến bay (lịch trình, gán máy bay & cổng đỗ, đường băng) và theo dõi hành trình của từng hành khách từ lúc đặt vé đến khi lên máy bay.
+
+Các chuyến bay đều **khởi hành từ sân bay nhà** đến một **thành phố đích**. Mỗi khi một hành khách mua vé, hệ thống tạo một vé (Ticket) và **trừ đi một ghế trống** của chuyến; huỷ vé sẽ trả lại ghế.
+
+### Ba phân hệ người dùng (phân quyền)
+
+| Vai trò | Quyền hạn chính |
+|---|---|
+| **Admin** | Toàn quyền: quản lý hạ tầng (máy bay, đường băng), tạo/xoá chuyến bay, **cấp & xoá tài khoản** Staff/Customer. |
+| **Staff** | Vận hành: tạo chuyến bay, gán máy bay & cổng, đổi trạng thái chuyến, check-in / boarding, đặt/huỷ vé, **giám sát hành khách**. |
+| **Customer** | Tra cứu chuyến bay, **mua / huỷ vé** của chính mình. |
+
+> Phân quyền được kiểm tra **phía máy chủ (C++)**, không chỉ ẩn nút ở giao diện.
 
 ---
 
-## 2. Hình ảnh giao diện thực tế (Screenshots)
+## 2. Các tính năng cốt lõi
 
-Dưới đây là một số hình ảnh demo trực quan về giao diện và chức năng của dự án:
+### Đặt & huỷ vé (trọng tâm)
+* Customer chọn chuyến còn ghế trống, nhập tên hành khách và mua vé. Hệ thống gọi `Flight::bookSeat()` (giảm ghế trống), sinh ra một `Ticket` và một `Passenger` gắn với chuyến.
+* Huỷ vé trả lại ghế cho chuyến.
+* Báo lỗi khi chuyến đã hết ghế hoặc đã kết thúc.
 
-### Bảng điều khiển chính (Dashboard)
-Giao diện được thiết kế theo phong cách tối giản, sử dụng hiệu ứng kính mờ (Glassmorphism) và hỗ trợ hiển thị tốt trên cả máy tính lẫn điện thoại di động:
-![SkyGate Dashboard](docs/images/dashboard_v2.png)
+### Giám sát hành khách
+* **Hành trình từng khách:** Đã đặt chỗ → Check-in → Lên máy bay.
+* **Tra cứu hành khách:** lọc theo tên / mã khách / hộ chiếu / mã chuyến.
+* **Theo dõi theo chuyến / cổng:** đếm số khách đã đặt, đã check-in, đã lên máy bay, số ghế trống, mức lấp đầy.
+* **Cảnh báo tự động:** khách chưa check-in khi sắp tới giờ bay, chuyến sắp đầy / hết ghế, hành lý quá cân.
 
-### Giám sát Sân bay & Cập nhật Thời tiết
-Giám sát trạng thái hoạt động của đường băng, cổng đỗ (gate), phân bổ nhân viên trực ban và cập nhật tình tiết thời tiết trực quan:
-![Airports & Weather Monitor](docs/images/airports_v2.png)
+### Quản lý chuyến bay & hạ tầng
+* Vòng đời chuyến bay theo máy trạng thái: `Scheduled → Check-in → Boarding → Gate Closed → Ready → Takeoff → In Air → Landed → Turnaround → Completed` (kèm `Delayed` / `Cancelled`).
+* **Đồng hồ mô phỏng:** tua nhanh thời gian ảo để chuyến bay tự chuyển trạng thái theo lịch.
+* Gán máy bay & cổng đỗ (kiểm tra tương thích loại gate, đường băng đủ dài, sức chứa).
+* Admin quản lý đội máy bay và đường băng của sân bay nhà.
 
-### Quản lý Nhân sự & Hành khách
-Bảng dữ liệu phi công, nhân viên mặt đất và danh sách hành khách được cấu trúc thành các cột dọc nhỏ gọn với thanh cuộn độc lập:
-![Personnel & Passenger Management](docs/images/people.png)
-
-### Giao diện Tạo chuyến bay mới
-Form cấu hình tạo chuyến bay kết hợp tự động gán máy bay, tổ bay trực ban, lựa chọn gate đỗ và đặt chỗ hành khách:
-![Create New Flight](docs/images/create_flight.png)
+### Ký gửi hành lý & sơ đồ ghế
+* Cảnh báo cước phí khi hành lý vượt **23 kg/kiện**.
+* Chọn ghế trực quan khi check-in.
 
 ---
 
 ## 3. Kiến trúc và Thiết kế hướng đối tượng (OOP)
 
-Dự án áp dụng chặt chẽ các nguyên lý thiết kế hướng đối tượng bền vững nhằm phân tách độc lập các luồng nghiệp vụ.
+Dự án áp dụng đầy đủ các nguyên lý OOP:
 
-### Các nguyên lý OOP áp dụng
+* **Đóng gói (Encapsulation):** dữ liệu nội tại của các thực thể (`Flight`, `Aircraft`, `Passenger`, `Ticket`, `User`...) là `private`/`protected`, truy xuất qua getter/setter.
+* **Kế thừa (Inheritance):**
+  * **Người dùng:** lớp cơ sở `User` → `Admin`, `Staff`, `Customer`.
+  * **Máy bay:** lớp cơ sở `Aircraft` → `WideBodyAircraft`, `NarrowBodyAircraft`, `TurbopropAircraft`.
+  * **Con người:** `Person` → `Passenger` (và `Staff` → `Pilot`/`GroundStaff` cho mô hình nhân sự).
+* **Đa hình (Polymorphism):** hàm ảo như `User::menu()` / `User::role()` (mỗi vai trò có giao diện riêng — đúng tinh thần `virtual showMenu()`), `Aircraft::requiredRunwayLength()` / `minTurnaroundMinutes()`.
+* **Mẫu Factory:** `AircraftFactory::create(...)` khởi tạo máy bay theo phân loại; `auth::makeUser(...)` khởi tạo tài khoản theo vai trò.
 
-*   **Tính đóng gói (Encapsulation):** Toàn bộ dữ liệu nội tại của các thực thể (`Flight`, `Pilot`, `Aircraft`, `Gate`...) đều được khai báo bảo mật (`private` / `protected`) và chỉ được truy xuất qua các phương thức getter/setter hoặc giao diện công khai được kiểm soát chặt chẽ.
-*   **Tính kế thừa (Inheritance):** 
-    *   **Nhân sự:** Lớp cơ sở `Person` kế thừa bởi lớp `Staff`. Lớp `Staff` tiếp tục được kế thừa bởi các lớp chi tiết `Pilot` (Phi công) và `GroundStaff` (Nhân viên mặt đất).
-    *   **Phương tiện:** Lớp cơ sở `Aircraft` (Máy bay) là lớp cha của các dòng máy bay chuyên biệt: `WideBodyAircraft`, `NarrowBodyAircraft` và `TurbopropAircraft`.
-*   **Tính đa hình (Polymorphism):** Định nghĩa các phương thức ảo (`virtual`) trong lớp cơ sở như `Aircraft::minTurnaroundMinutes()` hay `Aircraft::requiredRunwayLength()` để mỗi lớp con tự quyết định cấu hình nghiệp vụ riêng.
-*   **Mẫu thiết kế Factory (Factory Pattern):** Sử dụng `AircraftFactory` để khởi tạo linh hoạt các đối tượng máy bay dựa trên phân loại đầu vào mà không cần phơi bày logic khởi tạo phức tạp ra bên ngoài.
-
----
-
-## 4. Các tính năng cốt lõi
-
-### Quản lý tài nguyên hàng không
-*   **Sân bay & Đường băng:** Giám sát các đường băng hiện có, đo lường chiều dài cất/hạ cánh tối thiểu cần thiết cho từng loại máy bay để phân bổ an toàn.
-*   **Cổng đỗ (Gate):** Hỗ trợ nhiều loại gate (Single JetBridge, Double JetBridge, Remote Gate). Kiểm tra độ tương thích giữa loại gate và loại máy bay khi gán lịch đỗ.
-
-### Phân bổ và giám sát chuyến bay
-*   **Phi hành đoàn:** Tự động kiểm tra tính hợp lệ của tổ bay: phi công bắt buộc phải có chứng chỉ tương thích loại máy bay đó và tổng số giờ bay tích lũy trong tháng không được vượt quá 100 giờ.
-*   **Lịch trình:** Tự động tính toán khung thời gian chiếm dụng cổng đỗ dựa trên thời gian quay đầu tối thiểu của từng dòng máy bay.
-
-### Hệ thống mô phỏng thời gian thực
-*   **Đồng hồ mô phỏng (Simulation Clock):** Đồng hồ ảo tuyến tính cho phép người vận hành tua nhanh thời gian (bằng phút/giờ). Khi thời gian dịch chuyển, trạng thái các chuyến bay sẽ tự động biến đổi theo vòng đời tuyến tính: `Scheduled` -> `Check-In` -> `Boarding` -> `Takeoff` -> `In Air` -> `Landed` -> `Completed`.
-*   **Mô phỏng thời tiết xấu:** Khi áp dụng thời tiết bất lợi tại một sân bay, hệ thống tự động quét và hoãn (hoặc hủy) toàn bộ chuyến bay đi/đến sân bay đó trong khung giờ bị ảnh hưởng.
-
-### Tương tác với hành khách
-*   **Ký gửi hành lý:** Đo lường số kiện và khối lượng hành lý ký gửi, tự động cảnh báo cước phí nếu vượt quá giới hạn 23kg/kiện.
-*   **Sơ đồ ghế ngồi động:** Giao diện hiển thị trực quan sơ đồ khoang hành khách theo từng cấu hình máy bay. Khóa tự động các ghế đã được check-in.
+**Lớp điều khiển trung tâm `AirportSystem`** là nơi chứa toàn bộ logic nghiệp vụ. Cả hai frontend (console & web) chỉ là lớp bọc mỏng gọi các phương thức công khai của nó.
 
 ---
 
-## 5. Cấu trúc mã nguồn
+## 4. Cấu trúc mã nguồn
 
 ```text
-├── docs/                           # Tài liệu thiết kế & ảnh chụp màn hình giao diện
-│   └── images/                     # Các file ảnh sơ đồ thực tế
-├── src/                            # Logic lõi Backend (C++ OOP)
-│   ├── aircraft/                   # Phân lớp và Factory của Máy bay
-│   ├── common/                     # Tiện ích chung, định dạng DateTime, Enums
-│   ├── operations/                 # Logic Chuyến bay, Sân bay, Tổ bay, Cổng đỗ
-│   ├── people/                     # Phân lớp Phi công, Nhân viên, Hành khách
-│   ├── system/                     # Lớp quản lý trung tâm AirportSystem
-│   └── web/                        # API Routing và Web Server (JSON Wrapper)
-├── web/                            # Giao diện Frontend (HTML, CSS, Vanilla JS)
-│   ├── index.html                  # Bố cục cấu trúc giao diện
-│   ├── style.css                   # Thiết kế giao diện (Dark theme, Glassmorphism)
-│   └── app.js                      # Xử lý sự kiện và kết nối API
-├── data/                           # Dữ liệu lưu trữ cấu trúc dạng bảng (.txt)
-├── .gitignore                      # Cấu hình loại bỏ file rác khi Git tracking
-├── README.md                       # Tài liệu hướng dẫn sử dụng dự án này
-├── skygate_web.exe                 # Chương trình chạy tích hợp Web Server dưới Windows
-└── MoSkyGate.bat                   # File script khởi động nhanh trên Windows
+├── docs/images/          # Ảnh chụp màn hình giao diện
+├── src/                  # Backend C++ (OOP)
+│   ├── aircraft/         # Máy bay + AircraftFactory
+│   ├── auth/             # User → Admin / Staff / Customer (đăng nhập, phân quyền)
+│   ├── common/           # Tiện ích chung: DateTime, Enums, OpResult, Utils
+│   ├── operations/       # Flight, Airport, Gate, Runway, Crew, Ticket, Baggage
+│   ├── people/           # Person → Passenger; Staff → Pilot / GroundStaff
+│   ├── system/           # AirportSystem — lớp điều khiển trung tâm
+│   └── web/              # REST API + Web server (httplib), JSON thủ công
+├── web/                  # Frontend (HTML / CSS / Vanilla JS)
+│   ├── index.html        # Bố cục giao diện (đăng nhập + các tab)
+│   ├── style.css         # Giao diện (dark theme)
+│   └── app.js            # Xử lý sự kiện & gọi API
+├── data/                 # Dữ liệu lưu trữ dạng văn bản (.txt, ngăn bởi '|')
+├── build.sh              # Build app console  -> skygate(.exe)
+├── build_web.sh          # Build web server   -> skygate_web(.exe)
+├── deploy.ps1            # Script deploy lên VPS
+└── MoSkyGate.bat         # Khởi động nhanh web server trên Windows
 ```
 
 ---
 
 ## 5. Hướng dẫn cài đặt và vận hành
 
-### Yêu cầu hệ thống
-*   Hệ điều hành: Windows 10/11, macOS, hoặc Linux.
-*   Bộ biên dịch C++ hỗ trợ chuẩn C++17 trở lên (GCC, Clang hoặc MSVC).
-*   CMake (nếu muốn biên dịch lại từ mã nguồn).
+### Yêu cầu
+* Bộ biên dịch C++ hỗ trợ **C++17** (khuyến nghị **MSYS2 UCRT64 / g++ 15.x** trên Windows).
 
-### Cách chạy nhanh dưới Local (Windows)
-Dự án đã được đóng gói sẵn file chạy tiện lợi:
-1.  Tải mã nguồn về máy tính.
-2.  Mở thư mục `skygate/`.
-3.  Kích đúp vào file `MoSkyGate.bat` để chạy. Script sẽ tự động kích hoạt Server C++ tại cổng `8080` và mở giao diện Web trên trình duyệt mặc định của bạn.
+### Chạy nhanh (Windows)
+1. Tải mã nguồn, mở thư mục `skygate/`.
+2. Kích đúp `MoSkyGate.bat` — server chạy ở cổng `3000` và mở trình duyệt.
 
-*(Cách thủ công: Chạy `.\skygate_web.exe 8080` trong terminal tại thư mục `skygate/`, sau đó mở trình duyệt truy cập địa chỉ `http://localhost:8080`).*
+*(Thủ công: `./skygate_web.exe 8080` rồi mở `http://localhost:8080`.)*
 
-### Cách tự biên dịch (Build) dự án từ mã nguồn
-Nếu bạn thay đổi logic C++ ở Backend và muốn build lại:
-
-**Dành cho Windows (sử dụng g++):**
-Chạy script build được viết sẵn trong thư mục `skygate/`:
+### Tự biên dịch (Backend C++)
+Trên Windows, đặt MSYS2 UCRT64 lên đầu PATH trước khi build:
 ```bash
-./build_web.sh
+export PATH="/c/msys64/ucrt64/bin:$PATH"
+bash build_web.sh     # web server -> skygate_web.exe
+bash build.sh         # app console -> skygate.exe
 ```
 
-**Hoặc build thủ công bằng CMake:**
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
-```
+### Lưu trữ
+Toàn bộ trạng thái (chuyến bay, hành khách, **tài khoản**, **vé**) được lưu thành các file văn bản trong thư mục `data/`. Web server tự nạp khi khởi động và **tự lưu sau mỗi thao tác** — dữ liệu được giữ lại qua các lần khởi động lại.
 
 ---
 
 ## 6. Thành viên thực hiện
 
-*   **Nguyễn Ngọc Trường Phi**
-*   **Nguyễn Thị Thúy Hằng**
-*   **Vũ Minh Quang**
-*   **Nguyễn Đức Lộc**
-*   **Phạm Gia Huy**
+* **Nguyễn Ngọc Trường Phi**
+* **Nguyễn Thị Thúy Hằng**
+* **Vũ Minh Quang**
+* **Nguyễn Đức Lộc**
+* **Phạm Gia Huy**
