@@ -1,13 +1,12 @@
 # SkyGate — Hệ thống Quản lý Sân bay & Đặt vé máy bay
 
-Hệ thống quản lý sân bay (SkyGate) được xây dựng trên nền tảng **C++ hướng đối tượng (OOP)** vững chắc ở Backend, kết hợp giao diện **Web (HTML/CSS/JS)** hiện đại ở Frontend thông qua **REST API**. Đây là Bài tập lớn môn **Lập trình hướng đối tượng (LTHDT)** của Nhóm 5 — Trường Đại học Sư phạm Kỹ thuật TP.HCM (HCMUTE).
+Hệ thống quản lý sân bay (SkyGate) được xây dựng trên nền tảng **C++ hướng đối tượng (OOP)** vững chắc ở Backend, kết hợp giao diện **Web (HTML/CSS/JS)** hiện đại ở Frontend thông qua **REST API**. Đây là Bài tập lớn môn **Lập trình hướng đối tượng (LTHDT)** của Nhóm 5 — Trường Đại học Công Nghệ Kỹ thuật TP.HCM (HCMUTE).
 
 🔗 **Link trải nghiệm trực tuyến:** [http://159.65.141.209:8888](http://159.65.141.209:8888)
 
 > **Tài khoản demo:**
 > * **Quản trị viên (Admin):** `admin` / `admin123`
 > * **Nhân viên (Staff):** `staff` / `staff123`
-> * **Khách hàng (Customer):** `customer` / `cus123`
 
 ---
 
