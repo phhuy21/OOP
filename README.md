@@ -34,8 +34,8 @@ Hệ thống được thiết kế phân quyền chặt chẽ ngay từ Backend 
 | Vai trò | Phạm vi nghiệp vụ | Quyền hạn chính |
 | :--- | :--- | :--- |
 | **Admin** | Quản lý hệ thống & Hạ tầng | Khởi tạo/xoá máy bay và đường băng; Tạo/xoá chuyến bay; Quản lý tài khoản (Thêm/xoá Staff/Customer); Hoãn/huỷ chuyến bay. |
-| **Staff** | Điều hành & Giám sát | Đổi trạng thái chuyến bay; Check-in & Boarding (Lên máy bay) cho khách; Đặt/huỷ vé hộ; Theo dõi cảnh báo hành lý/quá tải. |
-| **Customer** | Mua vé & Tra cứu | Tìm kiếm chuyến bay khả dụng; Đặt vé trực quan chọn ghế; Huỷ vé của chính mình; Theo dõi trạng thái hành trình cá nhân. |
+| **Staff** | Điều hành & Giám sát | Thao tác chuyến bay: Thực hiện Check-in và Boarding (lẻ hoặc toàn bộ) cho khách; Đặt/huỷ vé hộ; Theo dõi giám sát. <br>*Lưu ý: Nhân viên không được quyền xoá, hoãn hay huỷ chuyến bay (chỉ Admin mới được can thiệp).* |
+| **Customer** | Mua vé & Tra cứu | Tìm kiếm chuyến bay khả dụng; Đặt vé chọn ghế trực quan; Huỷ vé của chính mình; Theo dõi trạng thái hành trình cá nhân. |
 
 ---
 
@@ -51,15 +51,35 @@ Hệ thống mô phỏng thực tế với các ràng buộc nghiệp vụ hàng
     *   Phi công bắt buộc phải có chứng chỉ phù hợp với phân loại máy bay (`WideBody`, `NarrowBody`, `Turboprop`).
     *   Tổng giờ bay trong tháng của phi công không được vượt quá **100 giờ**.
     *   Giờ nghỉ giữa hai chuyến bay liên tiếp của phi công phải đạt tối thiểu **8 tiếng**.
-*   **Quy trình hành khách:** Khách chỉ được **Check-in** khi chuyến bay ở trạng thái `Check-in` hoặc `Boarding`. Khách chỉ được **Lên máy bay (Boarding)** khi chuyến bay ở trạng thái `Boarding`. Khi cửa khởi hành đóng (`Gate Closed` trở đi), hành khách chưa lên máy bay sẽ bị đánh dấu là **Trễ chuyến (No-show)**.
+*   **Chặn đặt vé quá giờ bay:** Hệ thống tự động khóa tính năng đặt vé và mua vé (bao gồm cả nút mua vé trên giao diện và API Backend) đối với các chuyến bay đã qua giờ khởi hành hoặc đã đóng cửa khởi hành (`Gate Closed` trở đi).
+*   **Quy trình hành khách:** Khách chỉ được **Check-in** khi chuyến bay ở trạng thái `Check-in` hoặc `Boarding`. Khách chỉ được **Lên máy bay (Boarding)** khi chuyến bay ở trạng thái `Boarding`. Khi cửa khởi hành đóng (`Gate Closed` trở đi), hành khách chưa lên máy bay sẽ bị đánh dấu là **Trễ chuyến (No-show)** và bị chặn mọi thao tác check-in/boarding sau đó.
 
 ---
 
-## 3. Kiến trúc hướng đối tượng (OOP) của SkyGate
+## 3. Các tính năng chính
 
-Dự án là một minh chứng thực tế về việc áp dụng 4 tính chất cốt lõi của OOP:
+### Đặt & huỷ vé
+*   Khách hàng hoặc nhân viên chọn chuyến bay còn ghế trống, nhập tên và số điện thoại để mua vé.
+*   Hệ thống hỗ trợ sơ đồ chọn ghế trực quan (2 hàng đầu là Thương gia, các hàng sau là Thường) và khai báo hành lý ký gửi.
+*   Hủy vé sẽ giải phóng ghế trống của chuyến bay và xóa thông tin hành khách tương ứng.
 
-### 3.1. Tính Đóng gói (Encapsulation)
+### Giám sát hành khách & Trạng thái hoạt động
+*   **Hành trình động của khách:** Đồng bộ trạng thái thông minh theo thời gian thực của chuyến bay (ví dụ: hiển thị *Trễ chuyến (No-show)* nếu lỡ giờ bay, *Đang bay* khi chuyến bay cất cánh, *Đã hoàn thành* khi chuyến bay hạ cánh).
+*   **Tra cứu hành khách:** Lọc linh hoạt theo tên / mã hành khách / số điện thoại / mã chuyến bay.
+*   **Theo dõi giám sát:** Hiển thị trực quan số lượng vé đã bán, số ghế trống, và phần trăm lấp đầy của các chuyến bay đang hoạt động.
+*   **Cảnh báo tự động:** Phát hiện và cảnh báo các chuyến bay đã hết ghế/gần đầy, hành lý ký gửi vượt tiêu chuẩn (**23 kg/kiện**).
+
+### Quản lý hạ tầng & Đội bay
+*   **Trạng thái máy bay động:** Cột trạng thái hiển thị trực tiếp tình trạng máy bay (`Sẵn sàng`, `Đang đỗ`, `Đang bay`, hoặc `Quay đầu` kèm mã chuyến bay tương ứng) giúp dễ dàng quản lý đội bay.
+*   **Đồng hồ mô phỏng:** Tua thời gian ảo giúp kiểm thử tự động toàn bộ vòng đời của chuyến bay và trạng thái hành khách.
+
+---
+
+## 4. Kiến trúc hướng đối tượng (OOP) của SkyGate
+
+Dự án áp dụng đầy đủ các nguyên lý OOP:
+
+### 4.1. Tính Đóng gói (Encapsulation)
 Toàn bộ dữ liệu của các thực thể được bảo vệ bằng phạm vi truy cập `private` hoặc `protected`. Việc đọc và ghi dữ liệu phải đi qua các hàm Getter/Setter công khai (`public`) có tích hợp kiểm tra ràng buộc.
 
 *Minh họa đóng gói trong [Person.h](file:///d:/LTHDT/skygate/src/people/Person.h):*
@@ -79,7 +99,7 @@ public:
 };
 ```
 
-### 3.2. Tính Kế thừa (Inheritance)
+### 4.2. Tính Kế thừa (Inheritance)
 Hệ thống kế thừa phân cấp giúp tái sử dụng mã nguồn và quản lý các nhóm thực thể tương đồng một cách khoa học.
 
 ```mermaid
@@ -123,7 +143,7 @@ private:
 };
 ```
 
-### 3.3. Tính Đa hình (Polymorphism)
+### 4.3. Tính Đa hình (Polymorphism)
 Sử dụng hàm ảo (`virtual`) và phương thức ghi đè (`override`) cho phép hệ thống gọi các hành vi chuyên biệt của các lớp con thông qua con trỏ hoặc tham chiếu của lớp cha.
 
 *Ví dụ, khi kiểm tra hạ tầng sân bay cho một máy bay bất kỳ:*
@@ -143,12 +163,12 @@ int requiredRunwayLength() const override { return 1200; }
 int minGateRank() const override { return 0; } // Chỉ cần RemoteStand
 ```
 
-### 3.4. Tính Trừu tượng (Abstraction)
+### 4.4. Tính Trừu tượng (Abstraction)
 Các lớp cơ sở như `Person`, `Aircraft` và `User` được thiết kế dưới dạng lớp trừu tượng (chứa hàm ảo thuần túy và hàm hủy ảo), định nghĩa ra các giao diện (interface) nghiệp vụ mà không cần biết chi tiết triển khai cụ thể của từng loại đối tượng.
 
 ---
 
-## 4. Cấu trúc thư mục dự án
+## 5. Cấu trúc thư mục dự án
 
 ```text
 ├── src/                  # Mã nguồn Backend C++ (OOP)
@@ -176,7 +196,7 @@ Các lớp cơ sở như `Person`, `Aircraft` và `User` được thiết kế d
 
 ---
 
-## 5. Hướng dẫn cài đặt và biên dịch
+## 6. Hướng dẫn cài đặt và biên dịch
 
 ### Yêu cầu hệ thống
 * Trình biên dịch C++ hỗ trợ **C++17** (khuyến nghị **GCC/g++** hoặc **MSYS2 UCRT64** trên Windows).
@@ -208,7 +228,7 @@ Mở terminal tại thư mục dự án và chạy các lệnh sau:
 
 ---
 
-## 6. Thành viên thực hiện (Nhóm 5)
+## 7. Thành viên thực hiện (Nhóm 5)
 
 *   **Nguyễn Ngọc Trường Phi**
 *   **Nguyễn Thị Thúy Hằng**
