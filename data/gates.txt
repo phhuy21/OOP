@@ -1,15 +1,1 @@
 PHG|PHG-G1|DoubleJetBridge
-PHG|PHG-G2|DoubleJetBridge
-PHG|PHG-G3|DoubleJetBridge
-PHG|PHG-G4|DoubleJetBridge
-PHG|PHG-G5|DoubleJetBridge
-PHG|PHG-G6|DoubleJetBridge
-PHG|PHG-G7|DoubleJetBridge
-PHG|PHG-G8|DoubleJetBridge
-PHG|PHG-G9|SingleJetBridge
-PHG|PHG-G10|SingleJetBridge
-PHG|PHG-G11|SingleJetBridge
-PHG|PHG-G12|SingleJetBridge
-PHG|PHG-G13|SingleJetBridge
-PHG|PHG-G14|SingleJetBridge
-PHG|PHG-G15|SingleJetBridge

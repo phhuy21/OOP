@@ -23,12 +23,12 @@ std::string User::describe() const {
 //   booking   : đặt / huỷ vé
 
 std::vector<std::string> Admin::menu() const {
-    return {"flights", "monitor", "passengers", "airports", "aircrafts", "create",
+    return {"flights", "monitor", "passengers", "aircrafts", "create",
             "booking", "log", "users"};
 }
 
 std::vector<std::string> Staff::menu() const {
-    return {"flights", "monitor", "passengers", "airports", "aircrafts", "create",
+    return {"flights", "monitor", "passengers", "aircrafts",
             "booking", "log"};
 }
 

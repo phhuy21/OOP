@@ -1,5 +1,5 @@
-WideBody|VN-SKY900|SkyCruiser-900|360
-WideBody|VN-HRZ350|Horizon-350|320
-NarrowBody|VN-AERO321|AeroSwift-321|200
-NarrowBody|VN-CLD200|CloudJet-200|180
+WideBody|VN-SKY900|SkyCruiser-900|96
+WideBody|VN-HRZ350|Horizon-350|90
+NarrowBody|VN-AERO321|AeroSwift-321|84
+NarrowBody|VN-CLD200|CloudJet-200|60
 Turboprop|VN-TER72|TerraProp-72|72

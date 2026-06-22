@@ -31,3 +31,6 @@ coordinator_state.json
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Runtime data files
+data/simulation_time.txt

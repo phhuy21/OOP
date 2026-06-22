@@ -89,6 +89,9 @@ public:
     OpResult checkIn(const std::string& flightCode, const std::string& passengerId,
                      const std::string& seat);
     OpResult board(const std::string& flightCode, const std::string& passengerId);
+    // Thao tác hàng loạt: check-in / cho lên máy bay toàn bộ khách đủ điều kiện của chuyến.
+    OpResult checkInAll(const std::string& flightCode);
+    OpResult boardAll(const std::string& flightCode);
     OpResult advanceFlight(const std::string& flightCode);
     OpResult delayFlight(const std::string& flightCode, long long minutes,
                          const std::string& reason);
@@ -120,8 +123,12 @@ public:
     // Trả về -1 nếu chuyến chưa gán máy bay.
     int availableSeats(const std::string& flightCode);
     // Customer mua vé: tạo Passenger + Ticket, giảm ghế trống của chuyến.
+    // seat rỗng -> tự gán ghế trống đầu tiên; có giá trị -> validate & khoá ghế.
+    // Hạng vé được suy ra từ vị trí ghế (2 hàng đầu = Thương gia).
     OpResult bookTicket(const std::string& ownerUsername, const std::string& flightCode,
-                        const std::string& passengerName);
+                        const std::string& passengerName, const std::string& seat = "",
+                        int bagPieces = 0, double bagWeightKg = 0.0,
+                        const std::string& phone = "");
     // Huỷ vé: gỡ hành khách khỏi chuyến (trả ghế) và xoá vé.
     OpResult cancelTicket(const std::string& ticketId, const std::string& requesterUsername);
     std::shared_ptr<Ticket> findTicket(const std::string& ticketId);

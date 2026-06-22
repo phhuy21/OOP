@@ -514,16 +514,16 @@ function getTimelineHtml(status) {
   
   const stages = [
     { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn', 'Check-in'] },
-    { id: 'bd', label: 'Lên máy bay', matches: ['Boarding'] },
+    { id: 'bd', label: 'Lên máy bay', matches: ['Boarding', 'GateClosed', 'Ready'] },
     { id: 'ia', label: 'Đang bay', matches: ['Takeoff', 'InAir'] },
-    { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Completed'] }
+    { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Turnaround', 'Completed'] }
   ];
   
   let currentIdx = -1;
   if (['Scheduled', 'Delayed', 'CheckIn', 'Check-in'].includes(status)) currentIdx = 0;
-  else if (status === 'Boarding') currentIdx = 1;
+  else if (['Boarding', 'GateClosed', 'Ready'].includes(status)) currentIdx = 1;
   else if (['Takeoff', 'InAir'].includes(status)) currentIdx = 2;
-  else if (['Landed', 'Completed'].includes(status)) currentIdx = 3;
+  else if (['Landed', 'Turnaround', 'Completed'].includes(status)) currentIdx = 3;
   
   return `<div class="timeline">
     ${stages.map((st, idx) => {

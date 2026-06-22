@@ -1,6 +1,7 @@
 // SkyGate Web — bọc AirportSystem (C++ OOP) thành REST API + phục vụ web tĩnh.
 // KHÔNG sửa logic nghiệp vụ: chỉ gọi lại các hàm public sẵn có của AirportSystem.
 #include <cstdio>
+#include <cstdlib>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -8,6 +9,7 @@
 #include "../../third_party/httplib.h"
 #include "Json.h"
 
+#include <filesystem>
 #include "../system/AirportSystem.h"
 #include "../common/Enums.h"
 
@@ -60,6 +62,7 @@ std::string jGround(const std::shared_ptr<sg::GroundStaff>& g) {
 std::string jPassenger(const std::shared_ptr<sg::Passenger>& p) {
     return Obj()
         .str("id", p->id()).str("name", p->fullName()).num("age", (long long)p->age())
+        .str("phone", p->phone())
         .str("passport", p->passport()).str("flight", p->flightCode()).str("seat", p->seat())
         .boolean("checkedIn", p->checkedIn()).boolean("boarded", p->boarded())
         .num("bagPieces", (long long)p->baggage().pieces())
@@ -116,7 +119,7 @@ std::string jTicket(const std::shared_ptr<sg::Ticket>& t) {
     return Obj()
         .str("ticketId", t->ticketId()).str("flight", t->flightCode())
         .str("pid", t->passengerId()).str("passengerName", t->passengerName())
-        .str("owner", t->ownerUsername())
+        .str("owner", t->ownerUsername()).str("seatClass", t->seatClass())
         .dump();
 }
 
@@ -167,12 +170,16 @@ int main(int argc, char** argv) {
     const std::string kDataDir = "data";
 
     sg::AirportSystem system;
-    // Nạp dữ liệu đã lưu nếu có; nếu chưa có thì khởi tạo dữ liệu mẫu rồi lưu lại.
-    if (system.loadAll(kDataDir).ok && !system.airports().empty()) {
-        // Dữ liệu cũ có thể chưa có tài khoản đăng nhập -> bổ sung mặc định.
-        system.seedDefaultAccounts();
-        system.saveAll(kDataDir);
-        std::printf("Da nap du lieu tu thu muc '%s'.\n", kDataDir.c_str());
+    // Kiểm tra xem đã có thư mục dữ liệu và tệp tin airports.txt chưa (để nhận biết cơ sở dữ liệu đã khởi tạo)
+    bool hasData = std::filesystem::exists(kDataDir) && std::filesystem::exists(kDataDir + "/airports.txt");
+    if (hasData) {
+        if (system.loadAll(kDataDir).ok) {
+            system.seedDefaultAccounts();
+            system.saveAll(kDataDir);
+            std::printf("Da nap du lieu tu thu muc '%s'.\n", kDataDir.c_str());
+        } else {
+            std::printf("Loi: Khong the nap du lieu tu '%s'.\n", kDataDir.c_str());
+        }
     } else {
         system.seedDemoData();
         system.saveAll(kDataDir);
@@ -218,17 +225,37 @@ int main(int argc, char** argv) {
         sendJson(res, jResult(system.board(q(req, "code"), q(req, "pid"))));
     });
 
+    // ===== Thao tác hàng loạt: check-in / lên máy bay toàn bộ chuyến =====
+    svr.Post("/api/flight/checkin-all", [&](const httplib::Request& req, httplib::Response& res) {
+        sendJson(res, jResult(system.checkInAll(q(req, "code"))));
+    });
+    svr.Post("/api/flight/board-all", [&](const httplib::Request& req, httplib::Response& res) {
+        sendJson(res, jResult(system.boardAll(q(req, "code"))));
+    });
+
     // ===== Hoãn / huỷ chuyến =====
     svr.Post("/api/flight/delay", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được hoãn chuyến bay.")));
+            return;
+        }
         long long m = std::atoll(q(req, "minutes").c_str());
         sendJson(res, jResult(system.delayFlight(q(req, "code"), m, q(req, "reason"))));
     });
     svr.Post("/api/flight/cancel", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được huỷ chuyến bay.")));
+            return;
+        }
         sendJson(res, jResult(system.cancelFlight(q(req, "code"), q(req, "reason"))));
     });
 
     // ===== Tạo chuyến + gán tài nguyên + đặt chỗ (trước đây chỉ có ở CLI) =====
     svr.Post("/api/flight/create", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được tạo chuyến bay.")));
+            return;
+        }
         sendJson(res, jResult(system.createFlight(
             q(req, "code"), q(req, "origin"), q(req, "dest"),
             q(req, "departure"), q(req, "arrival"))));
@@ -299,6 +326,16 @@ int main(int argc, char** argv) {
         sendJson(res, jResult(system.addUser(q(req, "role"), q(req, "username"),
                                              q(req, "password"), q(req, "fullName"))));
     });
+    svr.Post("/api/register", [&](const httplib::Request& req, httplib::Response& res) {
+        std::string username = q(req, "username");
+        std::string password = q(req, "password");
+        std::string fullName = q(req, "fullName");
+        if (username.empty() || password.empty() || fullName.empty()) {
+            sendJson(res, jResult(sg::OpResult::failure("Vui lòng điền đầy đủ thông tin đăng ký.")));
+            return;
+        }
+        sendJson(res, jResult(system.addUser("Customer", username, password, fullName)));
+    });
     svr.Post("/api/user/delete", [&](const httplib::Request& req, httplib::Response& res) {
         if (!hasRole(q(req, "actor"), {"Admin"})) {
             sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được xoá tài khoản.")));
@@ -313,8 +350,10 @@ int main(int argc, char** argv) {
             sendJson(res, jResult(sg::OpResult::failure("Bạn không có quyền mua vé.")));
             return;
         }
-        sendJson(res, jResult(system.bookTicket(q(req, "actor"), q(req, "code"),
-                                                q(req, "passengerName"))));
+        sendJson(res, jResult(system.bookTicket(
+            q(req, "actor"), q(req, "code"), q(req, "passengerName"), q(req, "seat"),
+            std::atoi(q(req, "bagPieces").c_str()), std::atof(q(req, "bagWeight").c_str()),
+            q(req, "phone"))));
     });
     svr.Post("/api/ticket/cancel", [&](const httplib::Request& req, httplib::Response& res) {
         if (!hasRole(q(req, "actor"), {"Customer", "Staff", "Admin"})) {
@@ -359,8 +398,8 @@ int main(int argc, char** argv) {
         sendJson(res, jResult(system.deleteRunway(q(req, "airport"), q(req, "code"))));
     });
     svr.Post("/api/flight/delete", [&](const httplib::Request& req, httplib::Response& res) {
-        if (!hasRole(q(req, "actor"), {"Admin", "Staff"})) {
-            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin/Staff được xoá chuyến bay.")));
+        if (!hasRole(q(req, "actor"), {"Admin"})) {
+            sendJson(res, jResult(sg::OpResult::failure("Chỉ Admin được xoá chuyến bay.")));
             return;
         }
         sendJson(res, jResult(system.deleteFlight(q(req, "code"))));

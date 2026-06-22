@@ -1,6 +1,8 @@
 #include "AirportSystem.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -32,6 +34,43 @@ std::vector<std::string> splitList(const std::string& s) {
 
 std::string joinList(const std::vector<std::string>& items) {
     return utils::join(items, ',');
+}
+
+// --- Sơ đồ ghế: 6 cột A-F, số hàng = ceil(sốGhế/6), tối đa 100 ghế. ---
+constexpr int kSeatCols = 6;
+constexpr int kMaxSeats = 100;
+constexpr int kBusinessRows = 2;  // 2 hàng đầu là hạng Thương gia
+
+int seatCapacity(int capacity) { return capacity < kMaxSeats ? capacity : kMaxSeats; }
+int seatRows(int capacity) { return (seatCapacity(capacity) + kSeatCols - 1) / kSeatCols; }
+
+// Tách mã ghế "<hàng><cột>" -> (hàng>=1, chỉ-số-cột 0..5). false nếu sai định dạng.
+bool parseSeat(const std::string& seat, int& row, int& col) {
+    if (seat.size() < 2) return false;
+    size_t i = 0;
+    while (i < seat.size() && std::isdigit(static_cast<unsigned char>(seat[i]))) ++i;
+    if (i == 0 || i != seat.size() - 1) return false;  // số ở đầu + đúng 1 ký tự cột
+    char c = static_cast<char>(std::toupper(static_cast<unsigned char>(seat.back())));
+    if (c < 'A' || c >= 'A' + kSeatCols) return false;
+    row = std::atoi(seat.substr(0, i).c_str());
+    col = c - 'A';
+    return row >= 1;
+}
+
+// Ghế nằm trong sơ đồ của chuyến có sức chứa `capacity`?
+bool seatInRange(const std::string& seat, int capacity) {
+    int row, col;
+    if (!parseSeat(seat, row, col)) return false;
+    if (row > seatRows(capacity)) return false;
+    int idx = (row - 1) * kSeatCols + col;
+    return idx < seatCapacity(capacity);
+}
+
+// Hạng vé suy ra từ vị trí ghế: 2 hàng đầu = Thương gia, còn lại = Thường.
+std::string seatClassFromSeat(const std::string& seat) {
+    int row, col;
+    if (parseSeat(seat, row, col) && row <= kBusinessRows) return "Thương gia";
+    return "Thường";
 }
 
 }  // namespace
@@ -126,6 +165,8 @@ OpResult AirportSystem::setPassengerBaggage(const std::string& passengerId, int 
                                             double weightKg) {
     auto p = findPassenger(passengerId);
     if (!p) return OpResult::failure("Không tìm thấy hành khách " + passengerId);
+    if (pieces > 3) return OpResult::failure("Hành lý vượt quá số kiện tối đa cho phép (3 kiện).");
+    if (weightKg > 50.0) return OpResult::failure("Hành lý vượt quá khối lượng tối đa cho phép (50.0 kg).");
     p->setBaggage(Baggage(pieces, weightKg));
     std::string msg = "Đã cập nhật hành lý cho " + passengerId + ": " + p->baggage().describe() + ".";
     return OpResult::success(msg);
@@ -327,6 +368,43 @@ OpResult AirportSystem::board(const std::string& flightCode, const std::string& 
     return f->boardPassenger(passengerId);
 }
 
+OpResult AirportSystem::checkInAll(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    int done = 0, skipped = 0;
+    for (const auto& p : f->passengers()) {
+        if (p->checkedIn()) continue;
+        // Giữ ghế đã gán khi đặt vé (seat rỗng -> không đổi ghế).
+        if (f->checkInPassenger(p->id(), "").ok) ++done;
+        else ++skipped;
+    }
+    if (done == 0)
+        return OpResult::failure("Không check-in được khách nào (trạng thái " + f->statusName() +
+                                 " hoặc mọi khách đã check-in).");
+    std::string msg = "Đã check-in " + std::to_string(done) + " khách của chuyến " + flightCode + ".";
+    if (skipped) msg += " (" + std::to_string(skipped) + " khách không hợp lệ.)";
+    logEvent(flightCode + ": check-in hàng loạt " + std::to_string(done) + " khách.");
+    return OpResult::success(msg);
+}
+
+OpResult AirportSystem::boardAll(const std::string& flightCode) {
+    auto f = findFlight(flightCode);
+    if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
+    int done = 0, skipped = 0;
+    for (const auto& p : f->passengers()) {
+        if (!p->checkedIn() || p->boarded()) { ++skipped; continue; }
+        if (f->boardPassenger(p->id()).ok) ++done;
+        else ++skipped;
+    }
+    if (done == 0)
+        return OpResult::failure("Không cho khách nào lên máy bay được (cửa khởi hành chưa mở "
+                                 "hoặc khách chưa check-in). Trạng thái: " + f->statusName() + ".");
+    std::string msg = "Đã cho " + std::to_string(done) + " khách lên máy bay (chuyến " + flightCode + ").";
+    if (skipped) msg += " (" + std::to_string(skipped) + " khách chưa check-in/đã lên.)";
+    logEvent(flightCode + ": cho lên máy bay hàng loạt " + std::to_string(done) + " khách.");
+    return OpResult::success(msg);
+}
+
 std::vector<std::string> AirportSystem::validateCrewForFlight(const Flight& flight) const {
     if (!flight.crew()) return {"Chưa gán tổ bay."};
     if (!flight.aircraft()) return {"Chưa gán máy bay."};
@@ -410,7 +488,17 @@ OpResult AirportSystem::deleteFlight(const std::string& flightCode) {
     if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
 
     // Giải phóng hành khách & gỡ vé liên quan.
-    for (auto& p : f->passengers()) p->setFlightCode("");
+    std::vector<std::string> pids;
+    for (auto& p : f->passengers()) pids.push_back(p->id());
+
+    for (const auto& pid : pids) {
+        passengers_.erase(std::remove_if(passengers_.begin(), passengers_.end(),
+                                         [&](const std::shared_ptr<Passenger>& p) {
+                                             return p->id() == pid;
+                                         }),
+                          passengers_.end());
+    }
+
     tickets_.erase(std::remove_if(tickets_.begin(), tickets_.end(),
                                   [&](const std::shared_ptr<Ticket>& t) {
                                       return t->flightCode() == flightCode;
@@ -481,16 +569,54 @@ int AirportSystem::availableSeats(const std::string& flightCode) {
 
 OpResult AirportSystem::bookTicket(const std::string& ownerUsername,
                                    const std::string& flightCode,
-                                   const std::string& passengerName) {
+                                   const std::string& passengerName,
+                                   const std::string& seat, int bagPieces,
+                                   double bagWeightKg, const std::string& phone) {
     auto f = findFlight(flightCode);
     if (!f) return OpResult::failure("Không tìm thấy chuyến bay " + flightCode);
     if (f->isFinished()) return OpResult::failure("Chuyến bay đã kết thúc/huỷ, không thể đặt vé.");
+    
+    FlightStatus st = f->status();
+    if (st != FlightStatus::Scheduled && st != FlightStatus::CheckIn && 
+        st != FlightStatus::Boarding && st != FlightStatus::Delayed) {
+        return OpResult::failure("Chuyến bay đã đóng cửa vé (đã đóng quầy, cất cánh hoặc hoàn tất).");
+    }
+    if (simulationTime_ >= f->departure()) {
+        return OpResult::failure("Chuyến bay đã qua giờ khởi hành, không thể đặt vé.");
+    }
     if (passengerName.empty()) return OpResult::failure("Tên hành khách không được rỗng.");
+    if (bagPieces > 3) return OpResult::failure("Hành lý vượt quá số kiện tối đa cho phép (3 kiện).");
+    if (bagWeightKg > 50.0) return OpResult::failure("Hành lý vượt quá khối lượng tối đa cho phép (50.0 kg).");
     if (!f->aircraft())
         return OpResult::failure("Chuyến chưa gán máy bay nên chưa mở bán vé.");
     if (static_cast<int>(f->passengers().size()) >= f->aircraft()->capacity())
         return OpResult::failure("Chuyến đã hết ghế (sức chứa " +
                                  std::to_string(f->aircraft()->capacity()) + ").");
+
+    // --- Chọn & khoá ghế ---
+    int cap = f->aircraft()->capacity();
+    std::string chosenSeat = seat;
+    for (char& ch : chosenSeat) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    if (!chosenSeat.empty()) {
+        if (!seatInRange(chosenSeat, cap))
+            return OpResult::failure("Mã ghế không hợp lệ: " + seat);
+        for (const auto& p : f->passengers())
+            if (p->seat() == chosenSeat)
+                return OpResult::failure("Ghế " + chosenSeat + " đã có người chọn, mời chọn ghế khác.");
+    } else {
+        // Tự gán ghế trống đầu tiên (giữ cho console/đặt nhanh không cần sơ đồ).
+        std::vector<std::string> taken;
+        for (const auto& p : f->passengers())
+            if (!p->seat().empty()) taken.push_back(p->seat());
+        int total = seatCapacity(cap);
+        for (int idx = 0; idx < total && chosenSeat.empty(); ++idx) {
+            std::string s = std::to_string(idx / kSeatCols + 1) +
+                            static_cast<char>('A' + idx % kSeatCols);
+            if (std::find(taken.begin(), taken.end(), s) == taken.end()) chosenSeat = s;
+        }
+        if (chosenSeat.empty()) return OpResult::failure("Không còn ghế trống.");
+    }
+    std::string cls = seatClassFromSeat(chosenSeat);
 
     // Sinh mã hành khách & mã vé duy nhất.
     std::string pid;
@@ -503,12 +629,17 @@ OpResult AirportSystem::bookTicket(const std::string& ownerUsername,
     tk << "TK" << std::setw(4) << std::setfill('0') << ticketCounter_;
     std::string tid = tk.str();
 
-    passengers_.push_back(std::make_shared<Passenger>(pid, passengerName, 0, "", ""));
-    f->addPassenger(findPassenger(pid));
-    tickets_.push_back(std::make_shared<Ticket>(tid, flightCode, pid, passengerName, ownerUsername));
-    logEvent(flightCode + ": bán vé " + tid + " cho '" + passengerName + "' (" + ownerUsername + ").");
-    return OpResult::success("Đã mua vé " + tid + " cho '" + passengerName + "' trên chuyến " +
-                             flightCode + ". Ghế còn lại: " +
+    passengers_.push_back(std::make_shared<Passenger>(pid, passengerName, 0, phone, ""));
+    auto np = findPassenger(pid);
+    np->setSeat(chosenSeat);
+    np->setBaggage(Baggage(bagPieces, bagWeightKg));
+    f->addPassenger(np);
+    tickets_.push_back(
+        std::make_shared<Ticket>(tid, flightCode, pid, passengerName, ownerUsername, cls));
+    logEvent(flightCode + ": bán vé " + tid + " (" + cls + ", ghế " + chosenSeat + ") cho '" +
+             passengerName + "' (" + ownerUsername + ").");
+    return OpResult::success("Đã mua vé " + tid + " (" + cls + ", ghế " + chosenSeat + ") cho '" +
+                             passengerName + "' trên chuyến " + flightCode + ". Ghế còn lại: " +
                              std::to_string(availableSeats(flightCode)) + ".");
 }
 
@@ -863,7 +994,14 @@ OpResult AirportSystem::saveAll(const std::string& dir) {
         o << buildRecord({"COUNTER", std::to_string(ticketCounter_)}) << "\n";
         for (auto& t : tickets_)
             o << buildRecord({t->ticketId(), t->flightCode(), t->passengerId(),
-                              t->passengerName(), t->ownerUsername()}) << "\n";
+                              t->passengerName(), t->ownerUsername(), t->seatClass()}) << "\n";
+    }
+    // simulation time (thời gian mô phỏng)
+    {
+        std::ofstream o = open("simulation_time.txt");
+        if (simulationTime_.isValid()) {
+            o << simulationTime_.toString() << "\n";
+        }
     }
 
     return OpResult::success("Đã lưu toàn bộ dữ liệu vào thư mục '" + dir + "'.");
@@ -973,8 +1111,19 @@ OpResult AirportSystem::loadAll(const std::string& dir) {
         auto r = parseRecord(line);
         if (r.size() >= 2 && r[0] == "COUNTER") {
             ticketCounter_ = utils::toInt(r[1]);
+        } else if (r.size() >= 6) {
+            tickets_.push_back(std::make_shared<Ticket>(r[0], r[1], r[2], r[3], r[4], r[5]));
         } else if (r.size() >= 5) {
             tickets_.push_back(std::make_shared<Ticket>(r[0], r[1], r[2], r[3], r[4]));
+        }
+    }
+
+    // simulation time (thời gian mô phỏng)
+    simulationTime_ = DateTime();
+    for (auto& line : readLines(path("simulation_time.txt"))) {
+        DateTime dt = DateTime::parse(line);
+        if (dt.isValid()) {
+            simulationTime_ = dt;
         }
     }
 
@@ -1007,24 +1156,24 @@ void AirportSystem::seedDemoData() {
     simulationTime_ = DateTime(2026, 6, 10, 6, 0);
 
     // --- 1 sân bay nhà (mô hình quản lý 1 sân bay) ---
-    addAirport("PHG", "San bay Quoc te Phuong Hoang", "San bay nha — trung tam khai thac");
+    addAirport("PHG", "San bay Quoc te SkyGate", "San bay nha — trung tam khai thac");
     addRunway("PHG", "PHG-RW1", 3600);
     addRunway("PHG", "PHG-RW2", 3600);
-    for (int i = 1; i <= 8; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::DoubleJetBridge);
-    for (int i = 9; i <= 15; ++i) addGate("PHG", "PHG-G" + std::to_string(i), GateType::SingleJetBridge);
+    // Mô hình 1 sân bay nhà chỉ còn 1 cổng ra máy bay.
+    addGate("PHG", "PHG-G1", GateType::DoubleJetBridge);
 
-    // --- Đội máy bay khai thác tại PHG ---
-    addAircraft(AircraftCategory::WideBody, "VN-SKY900", "SkyCruiser-900", 360);
-    addAircraft(AircraftCategory::WideBody, "VN-HRZ350", "Horizon-350", 320);
-    addAircraft(AircraftCategory::NarrowBody, "VN-AERO321", "AeroSwift-321", 200);
-    addAircraft(AircraftCategory::NarrowBody, "VN-CLD200", "CloudJet-200", 180);
+    // --- Đội máy bay khai thác tại PHG (sức chứa ≤ 100 ghế, bội số 6 cho sơ đồ ghế) ---
+    addAircraft(AircraftCategory::WideBody, "VN-SKY900", "SkyCruiser-900", 96);
+    addAircraft(AircraftCategory::WideBody, "VN-HRZ350", "Horizon-350", 90);
+    addAircraft(AircraftCategory::NarrowBody, "VN-AERO321", "AeroSwift-321", 84);
+    addAircraft(AircraftCategory::NarrowBody, "VN-CLD200", "CloudJet-200", 60);
     addAircraft(AircraftCategory::Turboprop, "VN-TER72", "TerraProp-72", 72);
 
     // --- Hành khách mẫu (đã đặt vé sẵn ở các chuyến bên dưới) ---
     addPassenger("PX001", "Hoang Van Hung", 30, "0980000001", "P0001");
     setPassengerBaggage("PX001", 1, 18.0);
     addPassenger("PX002", "Ngo Thi Lan", 25, "0980000002", "P0002");
-    setPassengerBaggage("PX002", 3, 55.0);  // vượt mức -> cảnh báo
+    setPassengerBaggage("PX002", 3, 45.0);  // vượt mức -> cảnh báo
     addPassenger("PX003", "Dang Van Minh", 40, "0980000003", "P0003");
     setPassengerBaggage("PX003", 2, 40.0);
     addPassenger("PX004", "Tran Thi Mai", 28, "0980000004", "P0004");
@@ -1061,12 +1210,8 @@ std::string AirportSystem::summary() const {
     std::ostringstream o;
     o << "Sân bay: " << airports_.size()
       << " | Máy bay: " << aircrafts_.size()
-      << " | Phi công: " << pilots_.size()
-      << " | NV mặt đất: " << ground_.size()
       << " | Hành khách: " << passengers_.size()
-      << " | Tổ bay: " << crews_.size()
-      << " | Chuyến bay: " << flights_.size()
-      << " | Hàng đợi đi/đến: " << departureQueue_.size() << "/" << arrivalQueue_.size();
+      << " | Chuyến bay: " << flights_.size();
     return o.str();
 }
 

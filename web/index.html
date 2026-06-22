@@ -12,9 +12,10 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <!-- Màn hình đăng nhập (che toàn bộ dashboard cho tới khi đăng nhập) -->
+  <!-- Màn hình đăng nhập & đăng ký (che toàn bộ dashboard cho tới khi đăng nhập) -->
   <div id="login-screen" class="login-screen">
-    <div class="login-box">
+    <!-- Hộp đăng nhập -->
+    <div class="login-box" id="login-form-wrap">
       <div class="login-brand">
         <i data-lucide="plane-takeoff"></i> SkyGate
       </div>
@@ -27,7 +28,28 @@
       </label>
       <div id="login-error" class="login-error"></div>
       <button id="btn-login" class="btn"><i data-lucide="log-in"></i> Đăng nhập</button>
-      <p class="login-hint">Demo: <b>admin/admin123</b> · <b>staff/staff123</b> · <b>customer/cus123</b></p>
+      <p class="login-hint">Demo: <b>admin/admin123</b> · <b>staff/staff123</b></p>
+      <p class="login-hint" style="margin-top: 8px;">Chưa có tài khoản? <a href="#" id="link-to-register" class="auth-link">Đăng ký ngay</a></p>
+    </div>
+
+    <!-- Hộp đăng ký (ẩn mặc định) -->
+    <div class="login-box hidden" id="register-form-wrap" style="display: none;">
+      <div class="login-brand">
+        <i data-lucide="plane-takeoff"></i> SkyGate
+      </div>
+      <p class="login-sub">Đăng ký tài khoản Khách hàng mới</p>
+      <label>Tên đăng nhập
+        <input type="text" id="reg-user" placeholder="Tên đăng nhập..." autocomplete="username" />
+      </label>
+      <label>Mật khẩu
+        <input type="password" id="reg-pass" placeholder="••••••" autocomplete="new-password" />
+      </label>
+      <label>Họ tên
+        <input type="text" id="reg-fullname" placeholder="VD: Nguyen Van A" />
+      </label>
+      <div id="reg-error" class="login-error"></div>
+      <button id="btn-register-submit" class="btn"><i data-lucide="user-plus"></i> Đăng ký</button>
+      <p class="login-hint" style="margin-top: 8px;">Đã có tài khoản? <a href="#" id="link-to-login" class="auth-link">Đăng nhập</a></p>
     </div>
   </div>
 
@@ -77,9 +99,6 @@
     <button class="tab" data-tab="passengers">
       <i data-lucide="users" style="display:inline-block; width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Hành khách
     </button>
-    <button class="tab" data-tab="airports">
-      <i data-lucide="building-2" style="display:inline-block; width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Sân bay
-    </button>
     <button class="tab" data-tab="aircrafts">
       <i data-lucide="plane" style="display:inline-block; width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Máy bay
     </button>
@@ -117,7 +136,7 @@
       <section id="tab-passengers" class="panel">
         <h2><i data-lucide="users"></i> Tra cứu hành khách</h2>
         <div class="form" style="margin-bottom:6px;">
-          <label style="flex:1;">Tìm theo tên / mã khách / hộ chiếu / mã chuyến
+          <label style="flex:1;">Tìm theo tên / mã khách / mã chuyến
             <input type="text" id="pax-search" placeholder="Gõ để lọc…" />
           </label>
         </div>
@@ -127,7 +146,6 @@
               <tr>
                 <th>Mã</th>
                 <th>Tên</th>
-                <th>Hộ chiếu</th>
                 <th>Chuyến</th>
                 <th>Ghế</th>
                 <th>Hành trình</th>
@@ -139,21 +157,9 @@
         </div>
       </section>
 
-      <!-- TAB: Sân bay -->
-      <section id="tab-airports" class="panel">
-        <h2><i data-lucide="map-pin"></i> Sân bay nhà · Đường băng · Cổng</h2>
-        <div id="admin-runway-tools" class="form admin-only" style="margin-bottom:14px;">
-          <label>Sân bay <select id="rw-airport"></select></label>
-          <label>Mã đường băng <input type="text" id="rw-code" placeholder="VD: PHG-RW3" /></label>
-          <label>Chiều dài (m) <input type="number" id="rw-length" placeholder="VD: 3200" /></label>
-          <button id="btn-addrunway" class="btn"><i data-lucide="plus"></i> Thêm đường băng</button>
-        </div>
-        <div id="airports-list" class="cards"></div>
-      </section>
-
       <!-- TAB: Máy bay -->
       <section id="tab-aircrafts" class="panel">
-        <h2><i data-lucide="shield"></i> Đội máy bay khả dụng</h2>
+        <h2><i data-lucide="shield"></i> Máy bay khả dụng</h2>
         <div id="admin-aircraft-tools" class="form admin-only" style="margin-bottom:14px;">
           <label>Loại
             <select id="ac-category">
@@ -177,7 +183,7 @@
                 <th>Sức chứa</th>
                 <th>Runway tối thiểu</th>
                 <th>Quay đầu</th>
-                <th>Gate ưu tiên</th>
+                <th>Trạng thái</th>
                 <th></th>
               </tr>
             </thead>
@@ -189,13 +195,13 @@
       <!-- TAB: Tạo chuyến bay -->
       <section id="tab-create" class="panel">
         <h2><i data-lucide="plus-circle"></i> Tạo chuyến bay mới</h2>
-        <p class="hint">Chuyến khởi hành từ sân bay nhà tới một thành phố đích. Tạo chuyến rồi gán máy bay &amp; gate trong một bước.</p>
+        <p class="hint">Chuyến khởi hành từ sân bay nhà tới một thành phố đích. Chọn thành phố đến → giờ đến tự tính theo thời lượng bay. Tạo chuyến rồi gán máy bay &amp; gate trong một bước.</p>
         <div class="form">
           <label>Mã chuyến <input type="text" id="c-code" placeholder="VD: SG400" /></label>
           <label>Sân bay đi <select id="c-origin"></select></label>
-          <label>Thành phố đến <input type="text" id="c-dest" placeholder="VD: Da Nang" /></label>
+          <label>Thành phố đến <select id="c-dest"></select></label>
           <label>Giờ đi <input type="datetime-local" id="c-dep" /></label>
-          <label>Giờ đến <input type="datetime-local" id="c-arr" /></label>
+          <label>Giờ đến (tự tính) <input type="datetime-local" id="c-arr" readonly /></label>
           <label>Máy bay (tuỳ chọn) <select id="c-aircraft"></select></label>
           <label>Gate <select id="c-gate"></select></label>
           <button id="btn-create" class="btn"><i data-lucide="check"></i> Tạo chuyến</button>
@@ -205,11 +211,12 @@
       <!-- TAB: Đặt vé (Customer / Staff / Admin) -->
       <section id="tab-booking" class="panel">
         <h2><i data-lucide="ticket"></i> Đặt vé máy bay</h2>
-        <p class="hint">Chọn chuyến còn ghế trống, nhập tên hành khách và mua vé. Mỗi vé chiếm 1 ghế; huỷ vé sẽ trả lại ghế.</p>
+        <p class="hint">Chọn chuyến, nhập tên hành khách rồi bấm <b>Chọn ghế</b> — bảng sơ đồ ghế (2 hàng đầu hạng Thương gia) và ô nhập hành lý sẽ hiện ra; chọn ghế xong bấm <b>Mua vé</b> để xác nhận. Mỗi ghế chỉ 1 khách; ghế đã có người sẽ bị khoá.</p>
         <div class="form">
           <label>Chuyến bay <select id="t-flight"></select></label>
           <label>Tên hành khách <input type="text" id="t-name" placeholder="VD: Nguyen Van A" /></label>
-          <button id="btn-book" class="btn"><i data-lucide="shopping-cart"></i> Mua vé</button>
+          <label>Số điện thoại <input type="text" id="t-phone" placeholder="VD: 090..." /></label>
+          <button id="btn-book" class="btn"><i data-lucide="armchair"></i> Chọn ghế</button>
         </div>
         <h2 style="margin-top:18px;"><i data-lucide="receipt"></i> <span id="tickets-title">Vé đã mua</span></h2>
         <div class="table-container">
@@ -219,6 +226,8 @@
                 <th>Mã vé</th>
                 <th>Hành khách</th>
                 <th>Chuyến</th>
+                <th>Ghế</th>
+                <th>Hạng</th>
                 <th>Khách hàng</th>
                 <th></th>
               </tr>
@@ -231,13 +240,12 @@
       <!-- TAB: Quản lý tài khoản (Admin) -->
       <section id="tab-users" class="panel">
         <h2><i data-lucide="shield-check"></i> Quản lý tài khoản</h2>
-        <p class="hint">Admin có thể tạo và xoá tài khoản Staff / Customer / Admin.</p>
+        <p class="hint">Admin có thể tạo và xoá tài khoản Staff / Admin.</p>
         <div class="form">
           <label>Vai trò
             <select id="u-role">
-              <option value="Staff">Staff</option>
-              <option value="Customer">Customer</option>
-              <option value="Admin">Admin</option>
+              <option value="Staff">Nhân viên (Staff)</option>
+              <option value="Admin">Quản trị viên (Admin)</option>
             </select>
           </label>
           <label>Tên đăng nhập <input type="text" id="u-username" placeholder="VD: staff2" /></label>

@@ -37,6 +37,15 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
+// "YYYY-MM-DD HH:MM" -> "DD/MM/YYYY HH:MM" (hiển thị ngày-tháng-năm).
+function formatDMY(s) {
+  if (!s) return s;
+  const [d, t] = String(s).split(" ");
+  const parts = (d || "").split("-");
+  if (parts.length !== 3) return s;
+  return `${parts[2]}/${parts[1]}/${parts[0]}${t ? " " + t : ""}`;
+}
+
 // ---------- Tải & render toàn bộ trạng thái ----------
 async function load() {
   STATE = await api("/api/state");
@@ -51,13 +60,12 @@ async function load() {
   }
   
   renderFlights();
-  renderAirports();
   renderAircrafts();
   renderPassengers();
   renderMonitor();
 
   // Simulated Clock & Event Logs
-  if (STATE.currentTime) $("#sim-now").textContent = STATE.currentTime;
+  if (STATE.currentTime) $("#sim-now").textContent = formatDMY(STATE.currentTime);
   renderLog();
   initCreateForm();
 
@@ -65,7 +73,6 @@ async function load() {
   initBookingForm();
   renderTickets();
   if (isRole("Admin")) {
-    setOpts("#rw-airport", STATE.airports.map((a) => `<option value="${a.code}">${a.code}</option>`).join(""));
     renderUsers();
   }
 
@@ -87,16 +94,16 @@ function getTimelineHtml(status) {
   
   const stages = [
     { id: 'sc', label: 'Check-in', matches: ['Scheduled', 'Delayed', 'CheckIn', 'Check-in'] },
-    { id: 'bd', label: 'Lên máy bay', matches: ['Boarding'] },
+    { id: 'bd', label: 'Lên máy bay', matches: ['Boarding', 'GateClosed', 'Ready'] },
     { id: 'ia', label: 'Đang bay', matches: ['Takeoff', 'InAir'] },
-    { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Completed'] }
+    { id: 'ld', label: 'Hạ cánh', matches: ['Landed', 'Turnaround', 'Completed'] }
   ];
   
   let currentIdx = -1;
   if (['Scheduled', 'Delayed', 'CheckIn', 'Check-in'].includes(status)) currentIdx = 0;
-  else if (status === 'Boarding') currentIdx = 1;
+  else if (['Boarding', 'GateClosed', 'Ready'].includes(status)) currentIdx = 1;
   else if (['Takeoff', 'InAir'].includes(status)) currentIdx = 2;
-  else if (['Landed', 'Completed'].includes(status)) currentIdx = 3;
+  else if (['Landed', 'Turnaround', 'Completed'].includes(status)) currentIdx = 3;
   
   return `<div class="timeline">
     ${stages.map((st, idx) => {
@@ -155,11 +162,11 @@ function renderFlights() {
       
       ${getTimelineHtml(f.status)}
       
-      <div class="row"><i data-lucide="clock" style="width:14px; height:14px;"></i> Khởi hành: <b>${esc(f.departure) || "—"}</b></div>
-      <div class="row"><i data-lucide="clock-arrow-up" style="width:14px; height:14px;"></i> Dự kiến đến: <b>${esc(f.arrival) || "—"}</b></div>
+      <div class="row"><i data-lucide="clock" style="width:14px; height:14px;"></i> Khởi hành: <b>${esc(formatDMY(f.departure)) || "—"}</b></div>
+      <div class="row"><i data-lucide="clock-arrow-up" style="width:14px; height:14px;"></i> Dự kiến đến: <b>${esc(formatDMY(f.arrival)) || "—"}</b></div>
       <div class="row">
         <i data-lucide="info" style="width:14px; height:14px;"></i> 
-        <span>Máy bay: <b>${esc(f.aircraft) || "(chưa gán)"}</b> · Cổng: <b>${esc(f.gate) || "—"}</b> · Tổ bay: <b>${esc(f.crew) || "—"}</b></span>
+        <span>Máy bay: <b>${esc(f.aircraft) || "(chưa gán)"}</b> · Cổng: <b>${esc(f.gate) || "—"}</b></span>
       </div>
       <div class="row">
         <i data-lucide="users" style="width:14px; height:14px;"></i>
@@ -178,16 +185,14 @@ function renderFlights() {
 
       <div class="ops">
         ${isRole("Admin", "Staff") ? `
-        <button class="btn btn-sm" onclick="doAdvance('${f.code}')">
-          <i data-lucide="chevron-right"></i> Tiến trạng thái
-        </button>
         <button class="btn btn-sm btn-warn" onclick="openModal('${f.code}')">
           <i data-lucide="settings"></i> Thao tác chuyến
-        </button>
+        </button>` : ""}
+        ${isRole("Admin") ? `
         <button class="btn btn-sm btn-warn" onclick="doDeleteFlight('${f.code}')">
           <i data-lucide="trash-2"></i> Xoá
         </button>` : ""}
-        ${can("booking") ? `
+        ${can("booking") && ['Scheduled', 'Check-in', 'CheckIn', 'Boarding', 'Delayed'].includes(f.status) ? `
         <button class="btn btn-sm" onclick="bookFromFlight('${f.code}')">
           <i data-lucide="ticket"></i> Mua vé
         </button>` : ""}
@@ -209,60 +214,33 @@ async function doDeleteFlight(code) {
   await load();
 }
 
-// ---------- Sân bay ----------
-function gateClass(type) {
-  if (type.includes("Double")) return "double";
-  if (type.includes("Single")) return "single";
-  return "remote";
-}
-
-function renderAirports() {
-  $("#airports-list").innerHTML = STATE.airports.map((a) => {
-    const gatesHtml = a.gates.map((g) => {
-      const typeLabel = g.type.replace("JetBridge", "").replace("Stand", "");
-      return `
-        <div class="gate-badge ${gateClass(g.type)}">
-          <span class="gate-code">${esc(g.code)}</span>
-          <span class="gate-type">${esc(typeLabel)}</span>
-        </div>`;
-    }).join('');
-    
-    return `
-      <div class="card">
-        <h3 style="color:var(--accent); font-weight:700;">
-          <span class="card-title-left"><i data-lucide="building-2"></i> ${esc(a.code)}</span>
-        </h3>
-        <div class="row" style="color:var(--txt); font-weight:600; font-size:14px; margin-bottom:8px;">${esc(a.name)}</div>
-        <div class="row" style="align-items: flex-start;">
-          <i data-lucide="info" style="width:14px; height:14px; margin-top: 2px;"></i> 
-          <span>${esc(a.note)}</span>
-        </div>
-        <div class="row"><i data-lucide="arrow-right-left" style="width:14px; height:14px;"></i> Runway dài nhất: <b>${a.longestRunway}m</b></div>
-        <div class="row" style="align-items: flex-start;"><i data-lucide="route" style="width:14px; height:14px; margin-top:3px;"></i>
-          <span>Đường băng: ${a.runways.map((r) => `<b>${esc(r.code)}</b> (${r.length}m)${isRole("Admin") ? ` <a class="rw-del" title="Xoá đường băng" onclick="doDeleteRunway('${esc(a.code)}','${esc(r.code)}')">✕</a>` : ""}`).join(", ") || "—"}</span>
-        </div>
-        <div class="row" style="margin-top:14px; font-weight:600; color:var(--txt); border-top: 1px solid rgba(255,255,255,0.05); padding-top:12px;">
-          <i data-lucide="door-open" style="width:14px; height:14px;"></i> Cổng ra máy bay (${a.gates.length})
-        </div>
-        <div class="gate-grid">${gatesHtml}</div>
-      </div>`;
-  }).join("");
-}
-
 // ---------- Máy bay ----------
 function renderAircrafts() {
   const admin = isRole("Admin");
-  $("#aircrafts-table tbody").innerHTML = STATE.aircrafts.map((a) => `
-    <tr>
-      <td><b>${esc(a.registration)}</b></td>
-      <td>${esc(a.model)}</td>
-      <td><span class="badge scheduled">${esc(a.category)}</span></td>
-      <td><b>${a.capacity}</b> ghế</td>
-      <td>${a.requiredRunway}m</td>
-      <td>${a.turnaround}'</td>
-      <td><span class="badge checkin">${esc(a.preferredGate)}</span></td>
-      <td>${admin ? `<button class="btn btn-sm btn-warn" onclick="doDeleteAircraft('${esc(a.registration)}')"><i data-lucide="trash-2"></i></button>` : ""}</td>
-    </tr>`).join("");
+  $("#aircrafts-table tbody").innerHTML = STATE.aircrafts.map((a) => {
+    const currentFlight = STATE.flights.find(f => f.aircraft === a.registration && !['Completed', 'Cancelled'].includes(f.status));
+    let statusBadge = `<span class="badge completed">Sẵn sàng</span>`;
+    if (currentFlight) {
+      if (['Takeoff', 'InAir'].includes(currentFlight.status)) {
+        statusBadge = `<span class="badge boarding">Đang bay (${currentFlight.code})</span>`;
+      } else if (['Landed', 'Turnaround'].includes(currentFlight.status)) {
+        statusBadge = `<span class="badge scheduled" style="background-color: var(--accent); color: white;">Quay đầu (${currentFlight.code})</span>`;
+      } else {
+        statusBadge = `<span class="badge checkin">Đang đỗ (${currentFlight.code})</span>`;
+      }
+    }
+    return `
+      <tr>
+        <td><b>${esc(a.registration)}</b></td>
+        <td>${esc(a.model)}</td>
+        <td><span class="badge scheduled">${esc(a.category)}</span></td>
+        <td><b>${a.capacity}</b> ghế</td>
+        <td>${a.requiredRunway}m</td>
+        <td>${a.turnaround}'</td>
+        <td>${statusBadge}</td>
+        <td>${admin ? `<button class="btn btn-sm btn-warn" onclick="doDeleteAircraft('${esc(a.registration)}')"><i data-lucide="trash-2"></i></button>` : ""}</td>
+      </tr>`;
+  }).join("");
   lucide.createIcons();
 }
 
@@ -285,24 +263,6 @@ async function doDeleteAircraft(reg) {
   await load();
 }
 
-async function doAddRunway() {
-  const r = await api("/api/runway/create", {
-    airport: $("#rw-airport").value,
-    code: $("#rw-code").value.trim(),
-    length: $("#rw-length").value,
-  });
-  toast(r.message, !r.ok);
-  if (r.ok) { $("#rw-code").value = ""; $("#rw-length").value = ""; }
-  await load();
-}
-
-async function doDeleteRunway(airport, code) {
-  if (!confirm("Xoá đường băng " + code + " tại " + airport + "?")) return;
-  const r = await api("/api/runway/delete", { airport, code });
-  toast(r.message, !r.ok);
-  await load();
-}
-
 // ---------- Hành khách ----------
 function checkMark(val) {
   return val
@@ -312,10 +272,36 @@ function checkMark(val) {
 
 // Nhãn hành trình của một hành khách theo trạng thái.
 function journeyBadge(p) {
-  if (p.boarded) return `<span class="badge completed">Đã lên máy bay</span>`;
-  if (p.checkedIn) return `<span class="badge boarding">Đã check-in</span>`;
-  if (p.flight) return `<span class="badge checkin">Đã đặt chỗ</span>`;
-  return `<span class="badge scheduled">Chưa đặt chỗ</span>`;
+  if (!p.flight) return `<span class="badge scheduled">Chưa đặt chỗ</span>`;
+  
+  const f = STATE.flights.find(x => x.code === p.flight);
+  if (!f) return `<span class="badge checkin">Chờ check-in</span>`;
+  
+  if (f.status === 'Cancelled') {
+    return `<span class="badge cancelled" style="background-color: var(--border); color: var(--muted);">Chuyến bị huỷ</span>`;
+  }
+  
+  const isPastBoarding = ['GateClosed', 'Ready', 'Takeoff', 'InAir', 'Landed', 'Turnaround', 'Completed'].includes(f.status);
+  
+  if (p.boarded) {
+    if (['Takeoff', 'InAir'].includes(f.status)) {
+      return `<span class="badge boarding">Đang bay</span>`;
+    }
+    if (['Landed', 'Turnaround', 'Completed'].includes(f.status)) {
+      return `<span class="badge completed">Đã hoàn thành</span>`;
+    }
+    return `<span class="badge completed">Đã lên máy bay</span>`;
+  }
+  
+  if (isPastBoarding) {
+    return `<span class="badge cancelled" style="background-color: rgba(239, 68, 68, 0.1); color: var(--warn); border: 1px solid rgba(239, 68, 68, 0.2);">Trễ chuyến (No-show)</span>`;
+  }
+  
+  if (p.checkedIn) {
+    return `<span class="badge boarding">Đã check-in</span>`;
+  }
+  
+  return `<span class="badge checkin">Chờ check-in</span>`;
 }
 
 let paxSearchTerm = "";
@@ -325,18 +311,20 @@ function renderPassengers() {
   const term = paxSearchTerm.trim().toLowerCase();
   const list = STATE.passengers.filter((p) => {
     if (!term) return true;
-    return [p.id, p.name, p.passport, p.flight]
+    return [p.id, p.name, p.flight, p.phone]
       .some((v) => String(v || "").toLowerCase().includes(term));
   });
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="hint">Không có hành khách khớp.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="hint">Không có hành khách khớp.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map((p) => `
     <tr>
       <td><b>${esc(p.id)}</b></td>
-      <td>${esc(p.name)}</td>
-      <td><code>${esc(p.passport) || "—"}</code></td>
+      <td>
+        ${esc(p.name)}
+        ${p.phone ? `<br/><small style="color:var(--muted); font-size:11px; display:inline-flex; align-items:center; gap:2px; margin-top:2px;"><i data-lucide="phone" style="width:10px; height:10px;"></i>${esc(p.phone)}</small>` : ""}
+      </td>
       <td><b>${esc(p.flight) || "—"}</b></td>
       <td><span class="badge boarding">${esc(p.seat) || "—"}</span></td>
       <td>${journeyBadge(p)}</td>
@@ -372,16 +360,6 @@ function renderMonitor() {
     (f) => f.status !== "Completed" && f.status !== "Cancelled");
 
   for (const f of activeFlights) {
-    const mins = minutesToDeparture(f);
-    // Khách chưa check-in khi sắp tới giờ bay (<=60') và chuyến chưa cất cánh.
-    const notReady = ["Scheduled", "CheckIn", "Check-in", "Boarding", "Delayed"].includes(f.status);
-    if (mins !== null && mins >= 0 && mins <= 60 && notReady) {
-      const notCheckedIn = f.paxCount - f.checkedIn;
-      if (notCheckedIn > 0) {
-        alerts.push({ level: "warn", icon: "clock-alert",
-          text: `Chuyến <b>${esc(f.code)}</b> còn ${mins}' tới giờ bay nhưng <b>${notCheckedIn}</b> khách chưa check-in.` });
-      }
-    }
     // Chuyến gần đầy / hết ghế.
     if (f.availableSeats === 0) {
       alerts.push({ level: "warn", icon: "users",
@@ -408,13 +386,11 @@ function renderMonitor() {
       : `<div class="alert ok"><i data-lucide="check-circle-2"></i> <span>Không có cảnh báo. Mọi chuyến đang ổn định.</span></div>`;
   }
 
-  // ----- Theo dõi theo chuyến / cổng -----
   const box = $("#monitor-list");
   if (box) {
     const monitored = activeFlights;
     box.innerHTML = monitored.length
       ? monitored.map((f) => {
-          const waiting = f.paxCount - f.checkedIn;
           const pct = f.capacity ? Math.round((f.paxCount / f.capacity) * 100) : 0;
           return `
           <div class="card monitor-card">
@@ -422,12 +398,9 @@ function renderMonitor() {
               <span class="card-title-left"><i data-lucide="plane-takeoff" style="color:var(--accent);"></i> <b>${esc(f.code)}</b> → ${esc(f.dest)}</span>
               <span class="${statusClass(f.status)}">${esc(f.status)}</span>
             </h3>
-            <div class="row"><i data-lucide="door-open" style="width:14px;height:14px;"></i> Cổng: <b>${esc(f.gate) || "—"}</b> · Khởi hành: <b>${esc(f.departure) || "—"}</b></div>
+            <div class="row"><i data-lucide="door-open" style="width:14px;height:14px;"></i> Cổng: <b>${esc(f.gate) || "—"}</b> · Khởi hành: <b>${esc(formatDMY(f.departure)) || "—"}</b></div>
             <div class="monitor-stats">
               <div class="mstat"><span class="mstat-num">${f.paxCount}</span><span class="mstat-lbl">Đã đặt</span></div>
-              <div class="mstat"><span class="mstat-num">${f.checkedIn}</span><span class="mstat-lbl">Check-in</span></div>
-              <div class="mstat"><span class="mstat-num">${f.boarded}</span><span class="mstat-lbl">Đã lên</span></div>
-              <div class="mstat ${waiting > 0 ? 'warn-text' : ''}"><span class="mstat-num">${waiting}</span><span class="mstat-lbl">Chờ check-in</span></div>
               <div class="mstat"><span class="mstat-num">${f.availableSeats >= 0 ? f.availableSeats : "—"}</span><span class="mstat-lbl">Ghế trống</span></div>
             </div>
             <div class="loadbar"><div class="loadbar-fill" style="width:${pct}%;"></div></div>
@@ -446,50 +419,92 @@ function openModal(code) {
   
   $("#modal-title").innerHTML = `<i data-lucide="settings" style="display:inline-block; vertical-align:middle; margin-right:6px;"></i> Chuyến ${f.code} — ${f.status}`;
   
-  const canCheckIn = f.status === "CheckIn" || f.status === "Check-in" || f.status === "Boarding";
-  const pax = f.passengers.map((pid) => {
+  const paxList = f.passengers.map((pid) => {
     const p = STATE.passengers.find((x) => x.id === pid);
     const name = p ? p.name : pid;
-    let stText = "Chưa check-in";
-    let statusClass = "scheduled";
-    if (p && p.boarded) { stText = "Đã lên máy bay"; statusClass = "completed"; }
-    else if (p && p.checkedIn) { stText = `Đã check-in (Ghế ${p.seat})`; statusClass = "boarding"; }
+    let stText = "Chờ check-in";
+    let statusClass = "checkin";
+    if (f.status === 'Cancelled') {
+      stText = "Chuyến bị huỷ";
+      statusClass = "cancelled";
+    } else {
+      const isPastBoarding = ['GateClosed', 'Ready', 'Takeoff', 'InAir', 'Landed', 'Turnaround', 'Completed'].includes(f.status);
+      if (p && p.boarded) {
+        if (['Takeoff', 'InAir'].includes(f.status)) {
+          stText = "Đang bay";
+          statusClass = "boarding";
+        } else if (['Landed', 'Turnaround', 'Completed'].includes(f.status)) {
+          stText = "Đã hoàn thành";
+          statusClass = "completed";
+        } else {
+          stText = "Đã lên máy bay";
+          statusClass = "completed";
+        }
+      } else if (isPastBoarding) {
+        stText = "Trễ chuyến (No-show)";
+        statusClass = "cancelled";
+      } else if (p && p.checkedIn) {
+        stText = `Đã check-in${p.seat ? ' (Ghế ' + p.seat + ')' : ''}`;
+        statusClass = "boarding";
+      }
+    }
     
-    const isBtnDisabled = !canCheckIn || (p && p.checkedIn);
-    const btnTitle = !canCheckIn ? "Chỉ có thể check-in khi trạng thái chuyến bay là Check-in hoặc Boarding" : "";
+    const checkinDisabled = (!['Check-in', 'Boarding'].includes(f.status)) || (p && p.checkedIn);
+    const boardDisabled = (f.status !== 'Boarding') || (p && (!p.checkedIn || p.boarded));
     
     return `
       <div class="pax-line">
-        <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:1px 5px;">${stText}</span>)</small></span>
+        <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:2px 6px;">${stText}</span>)</small></span>
         <span class="pax-actions">
-          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${isBtnDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} title="${esc(btnTitle)}">
-            <i data-lucide="check-square"></i> Check-in
+          <button class="btn btn-sm" onclick="doCheckin('${code}','${pid}')" ${checkinDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+            <i data-lucide="check-square" style="width:12px; height:12px; vertical-align:middle; margin-right:2px;"></i> Check-in
           </button>
-          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${p && (!p.checkedIn || p.boarded) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
-            <i data-lucide="navigation-2"></i> Lên máy bay
+          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${boardDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+            <i data-lucide="navigation-2" style="width:12px; height:12px; vertical-align:middle; margin-right:2px;"></i> Lên máy bay
           </button>
         </span>
       </div>`;
   }).join("") || "<p class='hint'><i data-lucide='users'></i> Chuyến chưa có hành khách nào đăng ký.</p>";
 
+  let bulkHtml = "";
+  if (f.passengers.length > 0) {
+    const bulkCheckinDisabled = !['Check-in', 'Boarding'].includes(f.status);
+    const bulkBoardDisabled = f.status !== 'Boarding';
+    bulkHtml = `
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button class="btn btn-sm" onclick="doCheckinAll('${code}')" ${bulkCheckinDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="flex: 1;">
+          <i data-lucide="check-square"></i> Check-in toàn bộ
+        </button>
+        <button class="btn btn-sm" onclick="doBoardAll('${code}')" ${bulkBoardDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="flex: 1;">
+          <i data-lucide="navigation-2"></i> Cho lên toàn bộ
+        </button>
+      </div>`;
+  }
+
+  let adminOpsHtml = "";
+  if (isRole("Admin")) {
+    adminOpsHtml = `
+      <h4><i data-lucide="clock" style="width:14px; height:14px; vertical-align:middle;"></i> Hoãn chuyến</h4>
+      <div class="field">
+        <input id="m-min" placeholder="Số phút (ví dụ 60)" type="text" />
+        <input id="m-reason" placeholder="Lý do hoãn chuyến" type="text" />
+        <button class="btn btn-sm" onclick="doDelay('${code}')">Hoãn</button>
+      </div>
+      
+      <h4><i data-lucide="ban" style="width:14px; height:14px; vertical-align:middle;"></i> Huỷ chuyến</h4>
+      <div class="field">
+        <input id="m-creason" placeholder="Lý do huỷ chuyến" type="text" />
+        <button class="btn btn-sm btn-warn" onclick="doCancel('${code}')">Huỷ chuyến</button>
+      </div>`;
+  }
+
   $("#modal-body").innerHTML = `
-    <h4 style="margin-top:0"><i data-lucide="users" style="width:14px; height:14px; vertical-align:middle;"></i> Hành khách</h4>
-    ${pax}
-    
-    <div id="seat-picker-container"></div>
-    
-    <h4><i data-lucide="clock-alert" style="width:14px; height:14px; vertical-align:middle;"></i> Hoãn chuyến</h4>
-    <div class="field">
-      <input id="m-min" placeholder="Số phút (ví dụ 60)" type="text" />
-      <input id="m-reason" placeholder="Lý do hoãn chuyến" type="text" />
-      <button class="btn btn-sm" onclick="doDelay('${code}')">Hoãn</button>
+    <h4 style="margin-top:0"><i data-lucide="users" style="width:14px; height:14px; vertical-align:middle; margin-right:4px;"></i> Danh sách hành khách</h4>
+    ${bulkHtml}
+    <div style="max-height: 250px; overflow-y: auto; margin-bottom: 16px; border: 1px solid var(--border); padding: 8px; border-radius: 8px; background: rgba(15, 23, 42, 0.02);">
+      ${paxList}
     </div>
-    
-    <h4><i data-lucide="ban" style="width:14px; height:14px; vertical-align:middle;"></i> Huỷ chuyến</h4>
-    <div class="field">
-      <input id="m-creason" placeholder="Lý do huỷ chuyến" type="text" />
-      <button class="btn btn-sm btn-warn" onclick="doCancel('${code}')">Huỷ chuyến</button>
-    </div>`;
+    ${adminOpsHtml}`;
     
   $("#modal").classList.remove("hidden");
   lucide.createIcons();
@@ -499,63 +514,37 @@ function closeModal() {
   $("#modal").classList.add("hidden"); 
 }
 
-// Show seat selector grid in modal
-function showSeatPicker(code, pid) {
-  const occupied = STATE.passengers
-    .filter(p => p.flight === code && p.seat)
-    .map(p => p.seat.toUpperCase());
-  
-  const rows = [1, 2, 3, 4, 5];
-  const cols = ['A', 'B', 'C', 'D', 'E', 'F'];
-  
-  let html = `
-    <div class="seat-map-container" style="animation: fadeIn 0.25s ease;">
-      <p style="font-weight:600; font-size:13px; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-        <i data-lucide="armchair" style="width:16px; height:16px; color:var(--accent);"></i> Chọn ghế ngồi cho khách: <b style="color:var(--accent);">${pid}</b>
-      </p>
-      <div class="seat-map">
-        <div class="seat-map-header">
-          <div class="seat-map-col-label">A</div>
-          <div class="seat-map-col-label">B</div>
-          <div class="seat-map-col-label">C</div>
-          <div class="seat-map-col-label aisle-gap"></div>
-          <div class="seat-map-col-label">D</div>
-          <div class="seat-map-col-label">E</div>
-          <div class="seat-map-col-label">F</div>
-        </div>`;
-        
-  rows.forEach(r => {
-    html += `<div class="seat-row">
-      <div class="seat-row-label">${r}</div>`;
-    
-    cols.forEach((c, idx) => {
-      const seatCode = `${r}${c}`;
-      const isOccupied = occupied.includes(seatCode);
-      const seatClass = isOccupied ? 'seat occupied' : 'seat';
-      const onclickAttr = isOccupied ? '' : `onclick="selectSeat('${code}', '${pid}', '${seatCode}')"`;
-      
-      html += `<button class="${seatClass}" ${onclickAttr}>${seatCode}</button>`;
-      if (idx === 2) {
-        html += `<div class="aisle-gap"></div>`;
-      }
-    });
-    html += `</div>`;
-  });
-  
-  html += `
-        <div class="seat-legend">
-          <div class="legend-item"><div class="legend-dot available"></div> Ghế trống</div>
-          <div class="legend-item"><div class="legend-dot occupied"></div> Đã chọn</div>
-        </div>
-      </div>
-    </div>`;
-    
-  $("#seat-picker-container").innerHTML = html;
-  lucide.createIcons();
+// Check-in: ghế đã gán khi đặt vé nên chỉ cần xác nhận (không gửi seat).
+async function doCheckin(code, pid) {
+  const r = await api("/api/flight/checkin", { code, pid });
+  toast(r.message, !r.ok);
+  await load();
+  openModal(code);
 }
 
-async function selectSeat(code, pid, seatCode) {
-  const r = await api("/api/flight/checkin", { code, pid, seat: seatCode });
+async function doCheckinAll(code) {
+  const r = await api("/api/flight/checkin-all", { code });
+  toast(r.message, !r.ok);
+  await load();
+  openModal(code);
+}
+
+// Check-in những khách đã tích chọn (dùng khi ít khách).
+async function doCheckinSelected(code) {
+  const pids = [...document.querySelectorAll(".pax-check:checked")].map((c) => c.value);
+  if (!pids.length) { toast("Chưa tích khách nào để check-in.", true); return; }
+  let ok = 0, fail = 0;
+  for (const pid of pids) {
+    const r = await api("/api/flight/checkin", { code, pid });
+    r.ok ? ok++ : fail++;
+  }
+  toast(`Đã check-in ${ok} khách đã chọn${fail ? `, ${fail} lỗi` : ""}.`, fail > 0 && ok === 0);
+  await load();
+  openModal(code);
+}
+
+async function doBoardAll(code) {
+  const r = await api("/api/flight/board-all", { code });
   toast(r.message, !r.ok);
   await load();
   openModal(code);
@@ -621,7 +610,7 @@ function renderLog() {
   items.forEach((e) => {
     const st = LOG_STYLE[e.cat] || LOG_STYLE.assign;
     const timeParts = e.time.split(" ");
-    const day = timeParts[0] || "";
+    const day = formatDMY(timeParts[0] || "");
     const hour = timeParts[1] || "";
 
     html += `
@@ -647,15 +636,51 @@ function setOpts(sel, html) {
   if ([...el.options].some((o) => o.value === prev)) el.value = prev;
 }
 
+// Thành phố đích từ sân bay nhà PHG + thời lượng bay (phút) -> dùng để tự tính giờ đến.
+const CITY_DURATIONS = [
+  { name: "Ha Noi", min: 120 },
+  { name: "Da Nang", min: 60 },
+  { name: "Hue", min: 55 },
+  { name: "Nha Trang", min: 75 },
+  { name: "Da Lat", min: 70 },
+  { name: "Phu Quoc", min: 110 },
+  { name: "Can Tho", min: 100 },
+  { name: "Hai Phong", min: 115 },
+  { name: "Vinh", min: 90 },
+  { name: "Quy Nhon", min: 70 },
+  { name: "Buon Ma Thuot", min: 80 },
+];
+
+// Cộng `mins` phút vào chuỗi datetime-local "YYYY-MM-DDTHH:MM".
+function addMinutesToLocal(local, mins) {
+  if (!local) return "";
+  const d = new Date(local);
+  if (isNaN(d)) return "";
+  d.setMinutes(d.getMinutes() + mins);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Tự điền giờ đến = giờ đi + thời lượng bay của thành phố đã chọn.
+function updateArrival() {
+  const city = $("#c-dest").value;
+  const dep = $("#c-dep").value;
+  const item = CITY_DURATIONS.find((c) => c.name === city);
+  $("#c-arr").value = item && dep ? addMinutesToLocal(dep, item.min) : "";
+}
+
 function initCreateForm() {
   if (!STATE) return;
-  // Sân bay đi là sân bay nhà (chỉ 1) — chọn sẵn, đích là thành phố nhập tay.
+  // Sân bay đi là sân bay nhà (chỉ 1) — chọn sẵn; đích chọn từ danh sách thành phố.
   setOpts("#c-origin", STATE.airports.map((a) =>
     `<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join(""));
+  setOpts("#c-dest", CITY_DURATIONS.map((c) =>
+    `<option value="${esc(c.name)}">${esc(c.name)} · ${c.min}'</option>`).join(""));
   setOpts("#c-aircraft", `<option value="">(chưa gán)</option>` +
     STATE.aircrafts.map((a) =>
       `<option value="${a.registration}">${a.registration} · ${esc(a.category)}</option>`).join(""));
   setOpts("#c-gate", `<option value="">Tự động</option>`);
+  updateArrival();
 }
 
 async function doCreateFlight() {
@@ -678,7 +703,10 @@ async function doCreateFlight() {
 
   toast(msgs.join(" | "), false);
   $("#c-code").value = "";
-  $("#c-dest").value = "";
+  $("#c-dep").value = "";
+  $("#c-arr").value = "";
+  $("#c-aircraft").value = "";
+  $("#c-gate").value = "";
   await load();
 }
 
@@ -737,6 +765,47 @@ async function doLogin() {
   applyAuth();
 }
 
+function showRegister(e) {
+  if (e) e.preventDefault();
+  $("#login-form-wrap").style.display = "none";
+  $("#login-form-wrap").classList.add("hidden");
+  $("#register-form-wrap").style.display = "flex";
+  $("#register-form-wrap").classList.remove("hidden");
+  $("#login-error").textContent = "";
+  $("#reg-error").textContent = "";
+}
+
+function showLogin(e) {
+  if (e) e.preventDefault();
+  $("#register-form-wrap").style.display = "none";
+  $("#register-form-wrap").classList.add("hidden");
+  $("#login-form-wrap").style.display = "flex";
+  $("#login-form-wrap").classList.remove("hidden");
+  $("#login-error").textContent = "";
+  $("#reg-error").textContent = "";
+}
+
+async function doRegister() {
+  const username = $("#reg-user").value.trim();
+  const password = $("#reg-pass").value;
+  const fullName = $("#reg-fullname").value.trim();
+  if (!username || !password || !fullName) {
+    $("#reg-error").textContent = "Nhập đủ thông tin đăng ký.";
+    return;
+  }
+  const r = await api("/api/register", { username, password, fullName });
+  toast(r.message, !r.ok);
+  if (r.ok) {
+    $("#reg-user").value = "";
+    $("#reg-pass").value = "";
+    $("#reg-fullname").value = "";
+    $("#login-user").value = username;
+    showLogin();
+  } else {
+    $("#reg-error").textContent = r.message;
+  }
+}
+
 function doLogout() {
   stopPlay();
   localStorage.removeItem("skygate_user");
@@ -759,7 +828,7 @@ function applyAuth() {
   $("#clock-bar").style.display = isRole("Admin", "Staff") ? "" : "none";
   $("#btn-reset").style.display = isRole("Admin") ? "" : "none";
   // Công cụ quản trị (thêm máy bay/đường băng): chỉ Admin.
-  $$(".admin-only").forEach((el) => { el.style.display = isRole("Admin") ? "" : "none"; });
+  $$(".admin-only").forEach((el) => { el.style.display = isRole("Admin") ? (el.classList.contains("form") ? "flex" : "block") : "none"; });
 
   // Chọn tab hợp lệ đầu tiên.
   const firstTab = [...$$(".tab")].find((t) => t.style.display !== "none");
@@ -770,23 +839,156 @@ function applyAuth() {
 }
 
 // ---------- Đặt vé ----------
+const SEAT_COLS = ["A", "B", "C", "D", "E", "F"];
+const MAX_SEATS = 100;
+const BUSINESS_ROWS = 2;        // 2 hàng đầu = Thương gia
+let BOOK_SEAT = "";             // ghế đang chọn ở form đặt vé
+let BOOK_PHONE = "";            // số điện thoại của hành khách đang đặt
+
+// Hạng vé suy từ mã ghế (giống backend): hàng <= 2 -> Thương gia.
+function seatClassOf(seat) {
+  const row = parseInt(String(seat).match(/^\d+/), 10);
+  return row && row <= BUSINESS_ROWS ? "Thương gia" : "Thường";
+}
+
+let BOOK_CODE = "";             // chuyến đang đặt trong modal chọn ghế
+
 function initBookingForm() {
   if (!STATE) return;
   const opts = STATE.flights
-    .filter((f) => f.availableSeats > 0 && f.status !== "Cancelled" && f.status !== "Completed")
+    .filter((f) => f.availableSeats > 0 && ['Scheduled', 'Check-in', 'CheckIn', 'Boarding', 'Delayed'].includes(f.status))
     .map((f) => `<option value="${f.code}">${f.code} · ${esc(f.origin)}→${esc(f.dest)} · còn ${f.availableSeats} ghế</option>`)
     .join("");
   setOpts("#t-flight", opts || `<option value="">(không có chuyến còn ghế)</option>`);
 }
 
-async function doBookTicket() {
+// Cập nhật nhãn ghế đang chọn + hạng (trong modal chọn ghế).
+function updateSeatLabel() {
+  const lbl = $("#bk-seat-label");
+  if (!lbl) return;
+  lbl.textContent = BOOK_SEAT || "—";
+  const cl = $("#bk-class-label");
+  if (BOOK_SEAT) {
+    const k = seatClassOf(BOOK_SEAT);
+    cl.textContent = k;
+    cl.className = "badge " + (k === "Thương gia" ? "boarding" : "checkin");
+  } else { cl.textContent = ""; cl.className = ""; }
+}
+
+// Mở modal chọn ghế + hành lý sau khi nhập tên và bấm "Chọn ghế".
+function openBookingModal() {
   const code = $("#t-flight").value;
-  const passengerName = $("#t-name").value.trim();
+  const name = $("#t-name").value.trim();
+  const phone = $("#t-phone").value.trim();
   if (!code) { toast("Chưa chọn chuyến bay.", true); return; }
+  if (!name) { toast("Nhập tên hành khách.", true); return; }
+  BOOK_CODE = code;
+  BOOK_SEAT = "";
+  BOOK_PHONE = phone;
+  const f = STATE.flights.find((x) => x.code === code);
+  $("#modal-title").innerHTML = `<i data-lucide="armchair" style="display:inline-block; vertical-align:middle; margin-right:6px;"></i> Đặt vé — ${esc(name)} · ${esc(code)} → ${esc(f ? f.dest : "")}`;
+  $("#modal-body").innerHTML = `
+    <div id="bk-seatboard"></div>
+    <h4><i data-lucide="luggage" style="width:14px; height:14px; vertical-align:middle;"></i> Hành lý ký gửi</h4>
+    <div class="field" style="gap: 16px;">
+      <label style="flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted);">
+        Số kiện hành lý (tối đa 3)
+        <input id="bk-bagpieces" type="number" min="0" max="3" value="0" placeholder="Tối đa 3 kiện" style="width: 100%;" />
+      </label>
+      <label style="flex: 1; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted);">
+        Tổng cân nặng (kg) (tối đa 50)
+        <input id="bk-bagweight" type="number" min="0" max="50" step="0.1" value="0" placeholder="Tối đa 50 kg" style="width: 100%;" />
+      </label>
+    </div>
+    <div class="field" style="align-items:center; justify-content:space-between; margin-top: 14px;">
+      <span>Ghế đang chọn: <b id="bk-seat-label">—</b> <span id="bk-class-label"></span></span>
+      <button class="btn" onclick="confirmBookTicket()"><i data-lucide="shopping-cart"></i> Mua vé</button>
+    </div>`;
+  $("#modal").classList.remove("hidden");
+  renderBookingSeats(code);
+  lucide.createIcons();
+}
+
+// Sơ đồ ghế: 6 cột, hàng = ceil(sốGhế/6) (tối đa 100); ghế đã có khách bị khoá.
+function renderBookingSeats(code) {
+  const box = $("#bk-seatboard");
+  if (!box) return;
+  const f = STATE.flights.find((x) => x.code === code);
+  if (!f || !f.capacity) { box.innerHTML = ""; updateSeatLabel(); return; }
+  const total = Math.min(f.capacity, MAX_SEATS);
+  const rows = Math.ceil(total / SEAT_COLS.length);
+  const occupied = new Set(
+    STATE.passengers.filter((p) => p.flight === code && p.seat).map((p) => p.seat.toUpperCase()));
+
+  let html = `<div class="seat-map-container">
+      <p style="font-weight:600; font-size:13px; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <i data-lucide="armchair" style="width:16px; height:16px; color:var(--accent);"></i> Chọn ghế (${total} ghế · 2 hàng đầu hạng Thương gia)
+      </p>
+      <div class="seat-map">
+        <div class="seat-map-header">
+          <div class="seat-map-col-label">A</div><div class="seat-map-col-label">B</div>
+          <div class="seat-map-col-label">C</div><div class="seat-map-col-label aisle-gap"></div>
+          <div class="seat-map-col-label">D</div><div class="seat-map-col-label">E</div>
+          <div class="seat-map-col-label">F</div>
+        </div>`;
+  for (let r = 1; r <= rows; r++) {
+    html += `<div class="seat-row"><div class="seat-row-label">${r}</div>`;
+    SEAT_COLS.forEach((c, idx) => {
+      const seatIdx = (r - 1) * SEAT_COLS.length + idx;
+      if (seatIdx < total) {
+        const seat = `${r}${c}`;
+        const cls = ["seat"];
+        if (r <= BUSINESS_ROWS) cls.push("business");
+        if (occupied.has(seat)) cls.push("occupied");
+        if (seat === BOOK_SEAT) cls.push("selected");
+        const onclick = occupied.has(seat) ? "" : `onclick="selectBookingSeat('${seat}')"`;
+        html += `<button type="button" class="${cls.join(" ")}" ${onclick}>${seat}</button>`;
+      } else {
+        html += `<span class="seat" style="visibility:hidden;"></span>`;
+      }
+      if (idx === 2) html += `<div class="aisle-gap"></div>`;
+    });
+    html += `</div>`;
+  }
+  html += `<div class="seat-legend">
+        <div class="legend-item"><div class="legend-dot available"></div> Trống</div>
+        <div class="legend-item"><div class="legend-dot business"></div> Thương gia</div>
+        <div class="legend-item"><div class="legend-dot occupied"></div> Đã có khách</div>
+      </div></div></div>`;
+  box.innerHTML = html;
+  updateSeatLabel();
+  lucide.createIcons();
+}
+
+function selectBookingSeat(seat) {
+  console.log("selectBookingSeat called with:", seat);
+  BOOK_SEAT = seat;
+  renderBookingSeats(BOOK_CODE);
+}
+
+// Xác nhận mua vé từ modal chọn ghế.
+async function confirmBookTicket() {
+  console.log("confirmBookTicket called. BOOK_SEAT =", BOOK_SEAT, "BOOK_CODE =", BOOK_CODE, "BOOK_PHONE =", BOOK_PHONE);
+  if (!BOOK_SEAT) { toast("Chưa chọn ghế trên sơ đồ.", true); return; }
+  const passengerName = $("#t-name").value.trim();
   if (!passengerName) { toast("Nhập tên hành khách.", true); return; }
-  const r = await api("/api/ticket/book", { code, passengerName });
+  const bagPieces = parseInt($("#bk-bagpieces").value) || 0;
+  const bagWeight = parseFloat($("#bk-bagweight").value) || 0;
+  if (bagPieces < 0 || bagPieces > 3) { toast("Hành lý vượt quá số kiện tối đa cho phép (tối đa 3 kiện).", true); return; }
+  if (bagWeight < 0 || bagWeight > 50.0) { toast("Hành lý vượt quá khối lượng tối đa cho phép (tối đa 50 kg).", true); return; }
+  const r = await api("/api/ticket/book", {
+    code: BOOK_CODE, passengerName, seat: BOOK_SEAT,
+    phone: BOOK_PHONE,
+    bagPieces: $("#bk-bagpieces").value || "0",
+    bagWeight: $("#bk-bagweight").value || "0",
+  });
   toast(r.message, !r.ok);
-  if (r.ok) $("#t-name").value = "";
+  if (r.ok) {
+    $("#t-name").value = "";
+    $("#t-phone").value = "";
+    BOOK_SEAT = ""; BOOK_CODE = ""; BOOK_PHONE = "";
+    closeModal();
+  }
   await load();
 }
 
@@ -817,17 +1019,23 @@ function renderTickets() {
     $("#tickets-title").textContent = "Tất cả vé đã bán";
   }
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="hint">Chưa có vé.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="hint">Chưa có vé.</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map((t) => `
+  tbody.innerHTML = list.map((t) => {
+    const p = (STATE.passengers || []).find((x) => x.id === t.pid);
+    const seat = p && p.seat ? p.seat : "—";
+    const cls = t.seatClass || "Thường";
+    return `
     <tr>
       <td><b>${esc(t.ticketId)}</b></td>
       <td>${esc(t.passengerName)}</td>
       <td>${esc(t.flight)}</td>
+      <td><span class="badge boarding">${esc(seat)}</span></td>
+      <td><span class="badge ${cls === "Thương gia" ? "boarding" : "checkin"}">${esc(cls)}</span></td>
       <td>${esc(t.owner)}</td>
       <td><button class="btn btn-sm btn-warn" onclick="doCancelTicket('${t.ticketId}')"><i data-lucide="x"></i> Huỷ</button></td>
-    </tr>`).join("");
+    </tr>`; }).join("");
   lucide.createIcons();
 }
 
@@ -876,11 +1084,21 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#login-user").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
   $("#btn-logout").addEventListener("click", doLogout);
 
+  // Toggle đăng nhập / đăng ký & submit đăng ký
+  $("#link-to-register").addEventListener("click", showRegister);
+  $("#link-to-login").addEventListener("click", showLogin);
+  $("#btn-register-submit").addEventListener("click", doRegister);
+  $("#reg-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") doRegister(); });
+  $("#reg-user").addEventListener("keydown", (e) => { if (e.key === "Enter") doRegister(); });
+  $("#reg-fullname").addEventListener("keydown", (e) => { if (e.key === "Enter") doRegister(); });
+
   // Đặt vé & quản lý tài khoản & hạ tầng (Admin)
-  $("#btn-book").addEventListener("click", doBookTicket);
+  $("#t-phone").addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/\D/g, "");
+  });
+  $("#btn-book").addEventListener("click", openBookingModal);
   $("#btn-adduser").addEventListener("click", doAddUser);
   $("#btn-addaircraft").addEventListener("click", doAddAircraft);
-  $("#btn-addrunway").addEventListener("click", doAddRunway);
 
   // Tìm kiếm hành khách (lọc tại chỗ, không gọi lại server).
   $("#pax-search").addEventListener("input", (e) => {
@@ -903,6 +1121,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#btn-step").addEventListener("click", doTick);
   $("#btn-play").addEventListener("click", togglePlay);
   $("#btn-create").addEventListener("click", doCreateFlight);
+  $("#c-dest").addEventListener("change", updateArrival);
+  $("#c-dep").addEventListener("input", updateArrival);
 
   $$(".log-filter").forEach((btn) => btn.addEventListener("click", () => {
     $$(".log-filter").forEach((b) => b.classList.remove("active"));
