@@ -46,7 +46,7 @@ Hệ thống mô phỏng thực tế với các ràng buộc nghiệp vụ hàng
 *   **Tương thích hạ tầng:** Máy bay chỉ được gán vào chuyến bay nếu sân bay đi có đường băng đủ dài (`runwayLength >= requiredRunwayLength()`) và loại cổng đỗ phù hợp (`gateRank >= minGateRank()`).
 *   **Vòng đời chuyến bay (Flight Lifecycle):** Trạng thái chuyến bay chuyển dịch tự động hoặc thủ công theo luồng:
     $$\text{Scheduled} \rightarrow \text{Check-in} \rightarrow \text{Boarding} \rightarrow \text{Gate Closed} \rightarrow \text{Ready} \rightarrow \text{Takeoff} \rightarrow \text{In Air} \rightarrow \text{Landed} \rightarrow \text{Turnaround} \rightarrow \text{Completed}$$
-*   **Thời gian quay đầu (Turnaround time):** Khoảng cách giữa 2 chuyến bay liên tiếp sử dụng cùng một máy bay phải lớn hơn thời gian bảo dưỡng tối thiểu (`minTurnaroundMinutes`) của loại máy bay đó.
+*   **Thời gian quay đầu (Turnaround time):** Sau khi máy bay hạ cánh, chuyến bay sẽ đi vào trạng thái **Turnaround** (Quay đầu kỹ thuật). Thời gian quay đầu này được mô phỏng kéo dài đúng bằng thời gian bảo dưỡng tối thiểu (`minTurnaroundMinutes` từ 60-90 phút tùy loại máy bay) trước khi chuyến bay chính thức được xác nhận là hoàn tất (`Completed`).
 *   **Giới hạn phi công (Crew constraints):**
     *   Phi công bắt buộc phải có chứng chỉ phù hợp với phân loại máy bay (`WideBody`, `NarrowBody`, `Turboprop`).
     *   Tổng giờ bay trong tháng của phi công không được vượt quá **100 giờ**.
