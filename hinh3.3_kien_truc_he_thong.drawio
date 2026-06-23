@@ -55,7 +55,9 @@
         <mxCell id="e6" value="Phản hồi HTTP / JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="srv_json" target="ui_web">
           <mxGeometry relative="1" as="geometry"><Array points="110,358;110,93"/></mxGeometry>
         </mxCell>
-        <mxCell id="e7" value="Giao tiếp CSDL (Database.cpp / Prepared Statements)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="core_sys" target="db_main" />
+        <mxCell id="e7" value="Giao tiếp CSDL (Database.cpp / Prepared Statements)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="core_sys" target="db_main">
+          <mxGeometry relative="1" as="geometry"><Array points="630,488;630,735;375,735"/></mxGeometry>
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

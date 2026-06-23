@@ -55,29 +55,33 @@
         <mxCell id="se3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_gate" />
         <mxCell id="se4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_gate" target="st_ready" />
         <mxCell id="se5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_ready" target="st_take">
-          <mxGeometry relative="1" as="geometry"><Array points="675,150;115,150"/></mxGeometry>
+          <mxGeometry relative="1" as="geometry"><Array points="675,168;115,168"/></mxGeometry>
         </mxCell>
         <mxCell id="se6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_take" target="st_air" />
         <mxCell id="se7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_air" target="st_land" />
         <mxCell id="se8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_land" target="st_turn" />
         <mxCell id="se9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_turn" target="st_comp" />
-        <mxCell id="se_d1" value="Weather / Aircraft bận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_sched" target="st_delay">
-          <mxGeometry relative="1" as="geometry"><Array points="115,330;230,330"/></mxGeometry>
+        <mxCell id="se_d1" value="Weather / Aircraft bận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_sched" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="115,160;185,160;185,330;230,330"/></mxGeometry>
         </mxCell>
-        <mxCell id="se_d2" value="Thời tiết xấu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_check" target="st_delay">
-          <mxGeometry relative="1" as="geometry"><Array points="255,160;255,385"/></mxGeometry>
+        <mxCell id="se_d2" value="Thời tiết xấu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_check" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="255,165;195,165;195,325;265,325"/></mxGeometry>
         </mxCell>
-        <mxCell id="se_d3" value="Boarding muộn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_delay">
-          <mxGeometry relative="1" as="geometry"><Array points="395,160;290,160"/></mxGeometry>
+        <mxCell id="se_d3" value="Boarding muộn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_board" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="395,160;325,160;325,330;300,330"/></mxGeometry>
         </mxCell>
-        <mxCell id="se_d4" value="Tiếp tục sau hoãn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_delay" target="st_board" />
-        <mxCell id="se_c1" value="Huỷ chuyến" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_sched" target="st_cancel">
-          <mxGeometry relative="1" as="geometry"><Array points="90,160;90,440;470,440"/></mxGeometry>
+        <mxCell id="se_d4" value="Tiếp tục sau hoãn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.65;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_delay" target="st_board">
+          <mxGeometry relative="1" as="geometry"><Array points="315,320;335,320;335,170;410,170"/></mxGeometry>
         </mxCell>
-        <mxCell id="se_c2" value="Sự cố kỹ thuật" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_check" target="st_cancel">
-          <mxGeometry relative="1" as="geometry"><Array points="230,170;490,170"/></mxGeometry>
+        <mxCell id="se_c1" value="Huỷ chuyến" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_sched" target="st_cancel">
+          <mxGeometry relative="1" as="geometry"><Array points="90,170;455,170;455,325;500,325"/></mxGeometry>
         </mxCell>
-        <mxCell id="se_c3" value="Đóng quầy sự cố" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_cancel" />
+        <mxCell id="se_c2" value="Sự cố kỹ thuật" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_check" target="st_cancel">
+          <mxGeometry relative="1" as="geometry"><Array points="225,175;475,175;475,335;535,335"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_c3" value="Đóng quầy sự cố" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_board" target="st_cancel">
+          <mxGeometry relative="1" as="geometry"><Array points="365,180;485,180;485,340;570,340"/></mxGeometry>
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
