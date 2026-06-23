@@ -901,9 +901,6 @@ para('Mọi vi phạm đều trả về OpResult::failure() với thông báo ti
      sa=Pt(6))
 tab_caption('t41')
 table(['Quy tắc', 'Vị trí kiểm tra', 'Xử lý khi vi phạm'], [
-    ['Chứng chỉ máy bay', 'Crew::validateForFlight → Pilot::isCertifiedFor', 'Từ chối gán tổ bay'],
-    ['Giới hạn 100 giờ bay/tháng', 'Pilot::canTakeAdditionalHours', 'Từ chối gán tổ bay'],
-    ['Nghỉ tối thiểu 8 tiếng', 'Pilot::hasEnoughRestBefore', 'Từ chối gán tổ bay'],
     ['Đường băng đủ dài', 'Airport::hasRunwayFor → Aircraft::canUseRunwayLength', 'Từ chối gán máy bay'],
     ['Gate phù hợp loại máy bay', 'Aircraft::canUseGateType', 'Từ chối gán gate'],
     ['Mặc định cổng duy nhất', 'assignGate (Mặc định khi sân bay có 1 cổng)', 'Tự động gán cổng duy nhất, cho phép dùng chung cổng'],
