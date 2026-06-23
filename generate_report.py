@@ -11,6 +11,7 @@ Cải tiến:
 """
 
 from docx import Document
+import os
 from docx.shared import Pt, Cm, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.oxml.ns import qn
@@ -996,7 +997,21 @@ shots = [
             '(tra cứu + đặt vé). Tab bị ẩn không xuất hiện trong sidebar.'),
 ]
 for key, desc in shots:
-    para('[CHÈN ẢNH CHỤP MÀN HÌNH TẠI ĐÂY]', align=CENTER, sa=Pt(2))
+    img_name = ""
+    if key == 'f51': img_name = 'f51_login.png'
+    elif key == 'f52': img_name = 'f52_dashboard.png'
+    elif key == 'f53': img_name = 'f52_dashboard.png'
+    elif key == 'f54': img_name = 'f57_booking.png'
+    elif key == 'f55': img_name = 'f55_monitor.png'
+    elif key == 'f56': img_name = 'f56_create.png'
+    
+    img_path = os.path.join('images', img_name) if img_name else ""
+    if img_path and os.path.exists(img_path):
+        p = d.add_paragraph()
+        p.alignment = CENTER
+        p.add_run().add_picture(img_path, width=Cm(15))
+    else:
+        para('[CHÈN ẢNH CHỤP MÀN HÌNH TẠI ĐÂY]', align=CENTER, sa=Pt(2))
     fig_caption(key)
     para('Mô tả: ' + desc, italic=True, sa=Pt(10))
 
