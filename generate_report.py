@@ -537,9 +537,9 @@ h3('Nhóm 2: Máy bay — src/aircraft/')
 tab_caption('t33')
 table(['Lớp', 'Vai trò', 'Kế thừa từ', 'Tính chất OOP'], [
     ['Aircraft', 'Lớp cha trừu tượng — registration, model, capacity + 5 hàm ảo thuần', '—', 'Trừu tượng'],
-    ['WideBodyAircraft', 'Thân rộng — 2800m RW, gate đôi, quay đầu 90 phút', 'Aircraft', 'Kế thừa, Đa hình'],
-    ['NarrowBodyAircraft', 'Thân hẹp — 2500m RW, gate đơn, quay đầu 45 phút', 'Aircraft', 'Kế thừa, Đa hình'],
-    ['TurbopropAircraft', 'Cánh quạt — 1500m RW, gate bãi ngoài, quay đầu 30 phút', 'Aircraft', 'Kế thừa, Đa hình'],
+    ['WideBodyAircraft', 'Thân rộng — 2800m RW, gate đôi, quay đầu 0 phút (đã bỏ)', 'Aircraft', 'Kế thừa, Đa hình'],
+    ['NarrowBodyAircraft', 'Thân hẹp — 2500m RW, gate đơn, quay đầu 0 phút (đã bỏ)', 'Aircraft', 'Kế thừa, Đa hình'],
+    ['TurbopropAircraft', 'Cánh quạt — 1500m RW, gate bãi ngoài, quay đầu 0 phút (đã bỏ)', 'Aircraft', 'Kế thừa, Đa hình'],
     ['AircraftFactory', 'Factory Pattern — tạo máy bay đúng lớp con theo AircraftCategory', '—', 'Factory Pattern'],
 ])
 h3('Nhóm 3: Vận hành — src/operations/')
@@ -905,8 +905,8 @@ table(['Quy tắc', 'Vị trí kiểm tra', 'Xử lý khi vi phạm'], [
     ['Nghỉ tối thiểu 8 tiếng', 'Pilot::hasEnoughRestBefore', 'Từ chối gán tổ bay'],
     ['Đường băng đủ dài', 'Airport::hasRunwayFor → Aircraft::canUseRunwayLength', 'Từ chối gán máy bay'],
     ['Gate phù hợp loại máy bay', 'Aircraft::canUseGateType', 'Từ chối gán gate'],
-    ['Xung đột lịch gate', 'Gate::isFreeDuring → DateTime::overlaps', 'Từ chối gán gate'],
-    ['Xung đột lịch máy bay', 'assignAircraft (kiểm tra trùng giờ + quay đầu)', 'Từ chối gán máy bay'],
+    ['Mặc định cổng duy nhất', 'assignGate (Mặc định khi sân bay có 1 cổng)', 'Tự động gán cổng duy nhất, cho phép dùng chung cổng'],
+    ['Xung đột lịch máy bay', 'assignAircraft (kiểm tra trùng giờ bay trực tiếp)', 'Từ chối gán máy bay'],
     ['Hành lý quá mức (>2 kiện / >46 kg)', 'Baggage::isOverweight', 'Cảnh báo (không chặn)'],
     ['Hành lý vượt giới hạn (>3 kiện / >50 kg)', 'setPassengerBaggage / bookTicket', 'Chặn cứng (từ chối)'],
     ['Không hoãn/huỷ chuyến đang bay', 'Flight::delay / cancel', 'Từ chối, thông báo lỗi'],
@@ -1001,13 +1001,13 @@ for key, desc in shots:
     para('Mô tả: ' + desc, italic=True, sa=Pt(10))
 
 h2('5.3. Kiểm thử các tình huống đặc biệt')
-para('Các tình huống dưới đây được kiểm thử trực tiếp qua giao diện Web và CLI (driver.py). Cột '
+para('Các tình huống dưới đây được kiểm thử trực tiếp qua giao diện Web và ứng dụng Console (CLI). Cột '
      '"Thông báo thực tế" trích nguyên văn chuỗi tiếng Việt mà hệ thống trả về (OpResult.message).',
      sa=Pt(6))
 tab_caption('t51')
 table(['STT', 'Tình huống', 'Thông báo thực tế của hệ thống', 'KQ'], [
-    ['1', 'Gán máy bay đang bận chuyến khác (trùng giờ + quay đầu)',
-     '"Máy bay … đang bận thực hiện chuyến bay … (cần thời gian quay đầu … phút)."', 'Đạt'],
+    ['1', 'Gán máy bay đang bận chuyến khác (trùng giờ bay trực tiếp)',
+     '"Máy bay … đang bận thực hiện chuyến bay … (Lịch bay: … -> …)."', 'Đạt'],
     ['2', 'Gán tổ bay có phi công thiếu chứng chỉ',
      '"Phi công … không có chứng chỉ cho loại máy bay …."', 'Đạt'],
     ['3', 'Phi công vượt 100 giờ bay/tháng',
