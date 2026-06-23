@@ -959,22 +959,21 @@ for t in [
 d.add_page_break()
 h1('CHƯƠNG 5: KẾT QUẢ VÀ KIỂM THỬ')
 
-h2('5.1. Hướng dẫn biên dịch và chạy chương trình')
+h2('5.1. Triển khai hệ thống và hướng dẫn chạy chương trình')
 h3('Yêu cầu hệ thống')
 for t in [
-    'Windows 10/11 với MSYS2 UCRT64 (g++ 15.x) hoặc Linux với g++ hỗ trợ C++17.',
-    'Trình duyệt web hiện đại (Chrome/Edge/Firefox) cho giao diện web.',
-    'Python 3.x (để chạy driver kiểm thử tự động — tùy chọn).',
+    'Máy chủ: Máy chủ riêng VPS DigitalOcean (Ubuntu Linux) phục vụ chạy Web Server 24/7.',
+    'Máy khách: Trình duyệt web hiện đại (Chrome/Edge/Firefox) để truy cập giao diện người dùng.',
+    'Công cụ biên dịch: g++ (hỗ trợ C++17) trên Linux VPS hoặc MSYS2 UCRT64 trên Windows.',
 ]:
     bullet(t)
-h3('Biên dịch và chạy')
+h3('Triển khai và khởi chạy')
 for t in [
-    'Console: bash build.sh → skygate.exe. Chạy ./skygate.exe.',
-    'Web: bash build_web.sh → skygate_web.exe. Chạy ./skygate_web.exe [port] (mặc định 8080).',
-    'LƯU Ý: phải export PATH="/c/msys64/ucrt64/bin:$PATH" trước khi build/run, nếu không exe sẽ '
-    'lỗi 0xC0000139 do nạp nhầm DLL của Git-for-Windows.',
-    'sqlite3.c được biên dịch riêng bằng gcc (file C) rồi link với mã C++ (g++).',
-    'Lần chạy đầu tiên: nếu còn dữ liệu .txt cũ, hệ thống tự di trú sang skygate.db và backup .txt.bak.',
+    'Triển khai Web Server: Hệ thống được deploy tự động lên VPS qua script deploy.ps1 từ máy trạm.',
+    'Lệnh chạy trên VPS: nohup ./skygate_web 8888 > server.log 2>&1 & (biên dịch bằng build_web.sh trên Linux VPS và chạy nền ở cổng 8888).',
+    'Địa chỉ truy cập trực tuyến của đề tài: http://159.65.141.209:8888',
+    'Ứng dụng Console (CLI): Biên dịch bằng build.sh -> ./skygate.exe để chạy và kiểm tra trực tiếp từ console.',
+    'Di trú dữ liệu: Lần đầu chạy, hệ thống tự di trú toàn bộ file .txt cũ sang CSDL SQLite (skygate.db) và lưu trữ dự phòng dưới dạng file .bak.',
     'Tài khoản demo: admin/admin123 (Admin), staff/staff123 (Staff), customer/cus123 (Customer).',
 ]:
     bullet(t)
