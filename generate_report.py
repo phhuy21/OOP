@@ -368,7 +368,7 @@ for t in [
     'Hệ thống đặt/huỷ vé (Ticket) cho Customer với sơ đồ chọn ghế, phân hạng vé (Thương gia/Thường).',
     'Phân quyền 3 vai trò: Admin (toàn quyền), Staff (vận hành), Customer (tra cứu + mua vé).',
     'Lưu trữ dữ liệu bằng cơ sở dữ liệu SQLite (chế độ WAL) cho phép CLI và Web truy cập đồng thời.',
-    'Mô phỏng đồng hồ ảo (tickSimulation), hàng đợi cất/hạ cánh, mô phỏng thời tiết xấu.',
+    'Mô phỏng đồng hồ ảo (tickSimulation) và hàng đợi cất/hạ cánh.',
 ]:
     bullet(t)
 
@@ -377,7 +377,6 @@ for t in [
     'Không triển khai thanh toán thực tế hay tích hợp cổng thanh toán.',
     'Không mô phỏng nhiều sân bay đồng thời (chỉ quản lý sân bay nhà SKG; các điểm đến là tên '
     'thành phố, không phải sân bay trong hệ thống).',
-    'Không mô phỏng thời tiết theo thời gian thực (chỉ mô phỏng thời tiết xấu thủ công).',
     'Không có bản đồ trực quan (phiên bản Leaflet map đã được gỡ bỏ khỏi giao diện chính).',
     'Tên "SkyGate" và tên model máy bay (SkyCruiser-900, AeroSwift-321...) là tên giả lập.',
 ]:
@@ -507,7 +506,7 @@ table(['STT', 'Chức năng', 'Mô tả'], [
     ['3', 'Quản lý chuyến bay', 'Tạo, cập nhật trạng thái theo state machine, gán máy bay/gate'],
     ['4', 'Quản lý hành khách', 'Đặt chỗ, check-in, boarding, theo dõi trạng thái (kể cả No-show)'],
     ['5', 'Quản lý hành lý', 'Cảnh báo quá mức (>2 kiện hoặc >46 kg); chặn cứng (>3 kiện hoặc >50 kg)'],
-    ['6', 'Điều phối sân bay', 'Hàng đợi cất/hạ cánh, ưu tiên khẩn cấp, mô phỏng thời tiết xấu'],
+    ['6', 'Điều phối sân bay', 'Hàng đợi cất/hạ cánh và ưu tiên khẩn cấp'],
     ['7', 'Phân quyền', 'Admin / Staff / Customer — kiểm tra server-side ở mọi route mutation'],
     ['8', 'Đặt/Huỷ vé', 'Customer mua vé → tạo Passenger + Ticket, gán ghế; huỷ vé → trả ghế'],
     ['9', 'Lưu/đọc dữ liệu', 'CSDL SQLite (WAL); tự động di trú từ định dạng .txt cũ'],
@@ -929,7 +928,6 @@ table(['Endpoint', 'Method', 'Mô tả', 'Phân quyền'], [
     ['/api/ticket/book · cancel', 'POST', 'Mua / huỷ vé', 'Customer, Staff, Admin'],
     ['/api/aircraft/* · runway/*', 'POST', 'Thêm/xoá máy bay, đường băng', 'Admin'],
     ['/api/sim/tick', 'POST', 'Tua đồng hồ mô phỏng', 'Admin, Staff'],
-    ['/api/weather', 'POST', 'Mô phỏng thời tiết xấu', 'Admin'],
     ['/api/users · user/*', 'GET/POST', 'Xem/tạo/xoá tài khoản', 'Admin'],
 ])
 para('Phân quyền kiểm tra server-side bằng lambda hasRole() — đọc actor từ params, tra cứu User, '
@@ -1041,8 +1039,7 @@ for t in [
 h2('6.2. Hạn chế')
 for t in [
     'Chưa có unit test tự động — kiểm thử thủ công qua CLI driver và giao diện Web.',
-    'Mô phỏng thời tiết xấu còn đơn giản — chỉ hoãn/huỷ thủ công, chưa theo thời gian thực.',
-    'Giao diện CLI và Web chưa đồng bộ 100% chức năng (CLI có menu điều phối/thời tiết riêng).',
+    'Giao diện CLI và Web chưa đồng bộ 100% chức năng (CLI có thêm một số tính năng điều phối chuyên sâu).',
     'Chưa hỗ trợ đa ngôn ngữ — chuỗi hiển thị là tiếng Việt cố định trong code.',
     'Web client cập nhật bằng cách poll GET /api/state, chưa có push real-time (WebSocket/SSE).',
     'Mật khẩu tài khoản lưu dạng plaintext (phù hợp bài tập, không dùng cho sản phẩm thật).',
