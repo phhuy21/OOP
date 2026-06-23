@@ -727,8 +727,8 @@ for t in [
     '(từ menu() của User).',
     'Đăng nhập: overlay form username/password; sau khi login, actor lưu vào localStorage và tự '
     'động attach vào mọi POST.',
-    'Admin thấy nhiều tab nhất (gồm Sân bay, Máy bay, Tạo chuyến, Tài khoản...); Staff bị giới '
-    'hạn; Customer chỉ thấy tra cứu + đặt vé.',
+    'Admin thấy đầy đủ các tab (gồm Chuyến bay, Giám sát, Hành khách, Máy bay, Tạo chuyến, Đặt vé, Tài khoản, Nhật ký); Staff bị giới '
+    'hạn; Customer chỉ thấy tra cứu và Đặt vé.',
     'Phân quyền: client-side ẩn/hiện tab; server-side kiểm tra role ở mọi POST — server-side là '
     'gate thật.',
     'Giám sát (renderMonitor): tính client-side từ /api/state — cảnh báo khách chưa check-in gần '
