@@ -128,8 +128,12 @@ def h2(text): d.add_heading(text, level=2)
 def h3(text): d.add_heading(text, level=3)
 
 def bullet(text):
-    p = d.add_paragraph(style='List Bullet')
-    run = p.add_run(text); run.font.name = 'Times New Roman'; run.font.size = Pt(13)
+    p = d.add_paragraph()
+    p.paragraph_format.left_indent = Cm(0.75)
+    p.paragraph_format.space_after = Pt(4)
+    run = p.add_run(" - " + text)
+    run.font.name = 'Times New Roman'
+    run.font.size = Pt(13)
     return p
 
 def code_block(code_text):
@@ -203,8 +207,6 @@ TAB = {
     't36': 'Bảng 3.6 — Lược đồ các bảng trong CSDL SQLite',
     't41': 'Bảng 4.1 — Các quy tắc nghiệp vụ và xử lý vi phạm',
     't42': 'Bảng 4.2 — Các endpoint chính của REST API',
-    't51': 'Bảng 5.1 — Kết quả kiểm thử các tình huống đặc biệt',
-    't61': 'Bảng 6.1 — Phân công công việc nhóm 5',
 }
 
 def fig_caption(key):
@@ -280,7 +282,7 @@ rend = p.add_run(); fce = OxmlElement('w:fldChar'); fce.set(qn('w:fldCharType'),
 # ============================================================
 d.add_page_break()
 h1('DANH MỤC BẢNG')
-for k in ['t11', 't31', 't32', 't33', 't34', 't35', 't36', 't41', 't42', 't51', 't61']:
+for k in ['t11', 't31', 't32', 't33', 't34', 't35', 't36', 't41', 't42']:
     _list_entry(k, TAB[k])
 
 # ============================================================
@@ -364,7 +366,6 @@ for t in [
     'Quản lý hành khách: thêm, đặt chỗ, check-in, boarding, theo dõi trạng thái (kể cả No-show).',
     'Quản lý hành lý: cảnh báo khi vượt mức tiêu chuẩn (>2 kiện hoặc >46 kg tổng), chặn cứng khi '
     'vượt giới hạn tối đa (>3 kiện hoặc >50 kg).',
-    'Quản lý tổ bay (Crew): chứng chỉ, giới hạn 100 giờ bay/tháng, nghỉ tối thiểu 8 tiếng.',
     'Hệ thống đặt/huỷ vé (Ticket) cho Customer với sơ đồ chọn ghế, phân hạng vé (Thương gia/Thường).',
     'Phân quyền 3 vai trò: Admin (toàn quyền), Staff (vận hành), Customer (tra cứu + mua vé).',
     'Lưu trữ dữ liệu bằng cơ sở dữ liệu SQLite (chế độ WAL) cho phép CLI và Web truy cập đồng thời.',
@@ -504,16 +505,15 @@ tab_caption('t31')
 table(['STT', 'Chức năng', 'Mô tả'], [
     ['1', 'Quản lý sân bay', 'CRUD sân bay, cổng (Gate), đường băng (Runway)'],
     ['2', 'Quản lý máy bay', 'Thêm/xem/xoá máy bay theo loại (WideBody, NarrowBody, Turboprop)'],
-    ['3', 'Quản lý chuyến bay', 'Tạo, cập nhật trạng thái theo state machine, gán máy bay/tổ bay/gate'],
+    ['3', 'Quản lý chuyến bay', 'Tạo, cập nhật trạng thái theo state machine, gán máy bay/gate'],
     ['4', 'Quản lý hành khách', 'Đặt chỗ, check-in, boarding, theo dõi trạng thái (kể cả No-show)'],
     ['5', 'Quản lý hành lý', 'Cảnh báo quá mức (>2 kiện hoặc >46 kg); chặn cứng (>3 kiện hoặc >50 kg)'],
-    ['6', 'Quản lý tổ bay', 'Chứng chỉ, giờ bay ≤100h/tháng, nghỉ ≥8h trước cất cánh'],
-    ['7', 'Điều phối sân bay', 'Hàng đợi cất/hạ cánh, ưu tiên khẩn cấp, mô phỏng thời tiết xấu'],
-    ['8', 'Phân quyền', 'Admin / Staff / Customer — kiểm tra server-side ở mọi route mutation'],
-    ['9', 'Đặt/Huỷ vé', 'Customer mua vé → tạo Passenger + Ticket, gán ghế; huỷ vé → trả ghế'],
-    ['10', 'Lưu/đọc dữ liệu', 'CSDL SQLite (WAL); tự động di trú từ định dạng .txt cũ'],
-    ['11', 'Đồng hồ mô phỏng', 'Tua thời gian ảo, tự động đẩy trạng thái chuyến theo lịch'],
-    ['12', 'Giao diện Web', 'Dashboard tab theo vai trò, giao tiếp REST API'],
+    ['6', 'Điều phối sân bay', 'Hàng đợi cất/hạ cánh, ưu tiên khẩn cấp, mô phỏng thời tiết xấu'],
+    ['7', 'Phân quyền', 'Admin / Staff / Customer — kiểm tra server-side ở mọi route mutation'],
+    ['8', 'Đặt/Huỷ vé', 'Customer mua vé → tạo Passenger + Ticket, gán ghế; huỷ vé → trả ghế'],
+    ['9', 'Lưu/đọc dữ liệu', 'CSDL SQLite (WAL); tự động di trú từ định dạng .txt cũ'],
+    ['10', 'Đồng hồ mô phỏng', 'Tua thời gian ảo, tự động đẩy trạng thái chuyến theo lịch'],
+    ['11', 'Giao diện Web', 'Dashboard tab theo vai trò, giao tiếp REST API'],
 ])
 h3('3.1.2. Yêu cầu phi chức năng')
 for t in [
@@ -926,7 +926,6 @@ table(['Endpoint', 'Method', 'Mô tả', 'Phân quyền'], [
     ['/api/register', 'POST', 'Đăng ký tài khoản Customer', 'Tất cả'],
     ['/api/flight/create', 'POST', 'Tạo chuyến bay', 'Admin'],
     ['/api/flight/assign-aircraft', 'POST', 'Gán máy bay', 'Admin, Staff'],
-    ['/api/flight/assign-crew', 'POST', 'Gán tổ bay', 'Admin, Staff'],
     ['/api/flight/assign-gate', 'POST', 'Gán gate (rỗng = tự động)', 'Admin, Staff'],
     ['/api/flight/checkin · board', 'POST', 'Check-in / boarding hành khách', 'Admin, Staff'],
     ['/api/flight/advance', 'POST', 'Chuyển trạng thái kế tiếp', 'Admin, Staff'],
@@ -1015,47 +1014,7 @@ for key, desc in shots:
     fig_caption(key)
     para('Mô tả: ' + desc, italic=True, sa=Pt(10))
 
-h2('5.3. Kiểm thử các tình huống đặc biệt')
-para('Các tình huống dưới đây được kiểm thử trực tiếp qua giao diện Web và ứng dụng Console (CLI). Cột '
-     '"Thông báo thực tế" trích nguyên văn chuỗi tiếng Việt mà hệ thống trả về (OpResult.message).',
-     sa=Pt(6))
-tab_caption('t51')
-table(['STT', 'Tình huống', 'Thông báo thực tế của hệ thống', 'KQ'], [
-    ['1', 'Gán máy bay đang bận chuyến khác (trùng giờ bay trực tiếp)',
-     '"Máy bay … đang bận thực hiện chuyến bay … (Lịch bay: … -> …)."', 'Đạt'],
-    ['2', 'Gán tổ bay có phi công thiếu chứng chỉ',
-     '"Phi công … không có chứng chỉ cho loại máy bay …."', 'Đạt'],
-    ['3', 'Phi công vượt 100 giờ bay/tháng',
-     '"Phi công … vượt giới hạn giờ bay tháng (… + … > 100)."', 'Đạt'],
-    ['4', 'Phi công chưa nghỉ đủ 8 tiếng',
-     '"Phi công … chưa nghỉ đủ 8 tiếng trước giờ cất cánh."', 'Đạt'],
-    ['5', 'Gán máy bay cần đường băng dài hơn hiện có',
-     '"Sân bay đi … không có đường băng đủ dài (cần >= …m)."', 'Đạt'],
-    ['6', 'Gán gate không phù hợp loại máy bay',
-     '"Gate … (…) không phù hợp máy bay loại …."', 'Đạt'],
-    ['7', 'Cập nhật hành lý > 3 kiện (vượt giới hạn cứng)',
-     '"Hành lý vượt quá số kiện tối đa cho phép (3 kiện)."', 'Đạt'],
-    ['8', 'Hành lý 3 kiện / 45 kg (vượt mức 2 kiện nhưng trong giới hạn)',
-     'Cho lưu + đánh dấu "(VƯỢT MỨC)" và cảnh báo khi check-in', 'Đạt'],
-    ['9', 'Check-in khi chuyến chưa ở Check-in/Boarding',
-     '"Chỉ check-in khi chuyến ở trạng thái Check-in/Boarding (hiện: …)."', 'Đạt'],
-    ['10', 'Boarding khi cửa khởi hành đã đóng',
-     '"Cửa khởi hành đã đóng (trạng thái …). … lên muộn, không được boarding."', 'Đạt'],
-    ['11', 'Hoãn chuyến đang bay / đã kết thúc',
-     '"Chuyến bay đang bay hoặc đã kết thúc, không thể hoãn."', 'Đạt'],
-    ['12', 'Đặt vé chuyến đã hết ghế',
-     '"Chuyến đã hết ghế (sức chứa …)."', 'Đạt'],
-    ['13', 'Đặt vé sau giờ khởi hành',
-     '"Chuyến bay đã qua giờ khởi hành, không thể đặt vé."', 'Đạt'],
-    ['14', 'Customer huỷ vé của người khác',
-     '"Bạn chỉ có thể huỷ vé của chính mình."', 'Đạt'],
-    ['15', 'Staff gọi route tạo chuyến bay (chỉ Admin)',
-     '"Chỉ Admin được tạo chuyến bay."', 'Đạt'],
-    ['16', 'Xoá tài khoản Admin cuối cùng',
-     '"Không thể xoá Admin cuối cùng."', 'Đạt'],
-])
-para('Tất cả 16 tình huống đều cho kết quả Đạt — hệ thống xử lý đúng đặc tả nghiệp vụ, thông báo '
-     'lỗi rõ ràng bằng tiếng Việt và chỉ rõ nguyên nhân vi phạm.', bold=True, sb=Pt(6))
+# ============================================================
 
 # ============================================================
 # CHƯƠNG 6
@@ -1083,17 +1042,7 @@ for t in [
 ]:
     bullet(t)
 
-h2('6.2. Phân công công việc')
-tab_caption('t61')
-table(['Thành viên', 'MSSV', 'Công việc phụ trách', 'Tỉ lệ'], [
-    ['Nguyễn Ngọc Trường Phi', '23119187', 'Thiết kế lớp Airport/Gate/Runway; Gate reservation & chống xung đột; kiểm thử', '20%'],
-    ['Vũ Minh Quang', '23119198', 'Hệ thống tài khoản (auth/User); phân quyền server/client; REST API routes', '20%'],
-    ['Nguyễn Thị Thúy Hằng', '23119142', 'Hệ thống Con người (Person→Passenger/Staff→Pilot/GroundStaff); Crew & ràng buộc tổ bay', '20%'],
-    ['Nguyễn Đức Lộc', '23119165', 'Hệ thống Máy bay (Aircraft + 3 lớp con + Factory); Flight state machine; AirportSystem', '20%'],
-    ['Phạm Gia Huy', '23119148', 'Frontend Web; Json; web_main.cpp; CLI; CSDL SQLite (Database, di trú); Ticket; báo cáo', '20%'],
-])
-
-h2('6.3. Hạn chế')
+h2('6.2. Hạn chế')
 for t in [
     'Chưa có unit test tự động — kiểm thử thủ công qua CLI driver và giao diện Web.',
     'Mô phỏng thời tiết xấu còn đơn giản — chỉ hoãn/huỷ thủ công, chưa theo thời gian thực.',
@@ -1104,19 +1053,7 @@ for t in [
 ]:
     bullet(t)
 
-h2('6.4. Hướng phát triển')
-para('Nhóm đề xuất các hướng phát triển cho các phiên bản tiếp theo:', sa=Pt(6))
-for t in [
-    'Đẩy cập nhật real-time tới trình duyệt bằng WebSocket/SSE thay vì poll toàn bộ state.',
-    'Bổ sung unit test (Google Test / Catch2) — đạt coverage ≥80% cho các lớp nghiệp vụ cốt lõi.',
-    'Băm mật khẩu (bcrypt/argon2) thay vì lưu plaintext.',
-    'Triển khai Docker (Dockerfile, docker-compose) để chạy trên mọi môi trường.',
-    'Thêm biểu đồ thống kê (Chart.js) trên dashboard.',
-    'Hỗ trợ đa ngôn ngữ (i18n) — tách chuỗi hiển thị, hỗ trợ Tiếng Việt và Tiếng Anh.',
-    'Mở rộng quản lý nhiều sân bay đồng thời (mỗi sân bay đích có gate/runway riêng).',
-    'Mô phỏng thời tiết tự động theo mùa, tự động hoãn/huỷ khi điều kiện xấu.',
-]:
-    bullet(t)
+# ============================================================
 
 # ============================================================
 # PHỤ LỤC
