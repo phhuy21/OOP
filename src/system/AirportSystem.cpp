@@ -1172,13 +1172,13 @@ void AirportSystem::seedDemoData() {
     simulationTime_ = DateTime(2026, 6, 10, 6, 0);
 
     // --- 1 sân bay nhà (mô hình quản lý 1 sân bay) ---
-    addAirport("PHG", "San bay Quoc te SkyGate", "San bay nha — trung tam khai thac");
-    addRunway("PHG", "PHG-RW1", 3600);
-    addRunway("PHG", "PHG-RW2", 3600);
+    addAirport("SKG", "San bay Quoc te SkyGate", "San bay nha — trung tam khai thac");
+    addRunway("SKG", "SKG-RW1", 3600);
+    addRunway("SKG", "SKG-RW2", 3600);
     // Mô hình 1 sân bay nhà chỉ còn 1 cổng ra máy bay.
-    addGate("PHG", "PHG-G1", GateType::DoubleJetBridge);
+    addGate("SKG", "SKG-G1", GateType::DoubleJetBridge);
 
-    // --- Đội máy bay khai thác tại PHG (sức chứa ≤ 100 ghế, bội số 6 cho sơ đồ ghế) ---
+    // --- Đội máy bay khai thác tại SKG (sức chứa ≤ 100 ghế, bội số 6 cho sơ đồ ghế) ---
     addAircraft(AircraftCategory::WideBody, "VN-SKY900", "SkyCruiser-900", 96);
     addAircraft(AircraftCategory::WideBody, "VN-HRZ350", "Horizon-350", 90);
     addAircraft(AircraftCategory::NarrowBody, "VN-AERO321", "AeroSwift-321", 84);
@@ -1195,19 +1195,19 @@ void AirportSystem::seedDemoData() {
     addPassenger("PX004", "Tran Thi Mai", 28, "0980000004", "P0004");
     setPassengerBaggage("PX004", 1, 12.0);
 
-    // --- Chuyến bay mẫu: đều KHỞI HÀNH từ PHG tới các thành phố đích ---
-    createFlight("SG100", "PHG", "TP. Ho Chi Minh", "2026-06-10 08:00", "2026-06-10 09:30");
+    // --- Chuyến bay mẫu: đều KHỞI HÀNH từ SKG tới các thành phố đích ---
+    createFlight("SG100", "SKG", "TP. Ho Chi Minh", "2026-06-10 08:00", "2026-06-10 09:30");
     assignAircraft("SG100", "VN-AERO321");
     assignGate("SG100", "");  // tự động
     bookPassenger("SG100", "PX001");
     bookPassenger("SG100", "PX002");
 
-    createFlight("SG200", "PHG", "Da Nang", "2026-06-10 10:00", "2026-06-10 11:00");
+    createFlight("SG200", "SKG", "Da Nang", "2026-06-10 10:00", "2026-06-10 11:00");
     assignAircraft("SG200", "VN-TER72");
     assignGate("SG200", "");
     bookPassenger("SG200", "PX003");
 
-    createFlight("SG300", "PHG", "Phu Quoc", "2026-06-10 13:00", "2026-06-10 15:00");
+    createFlight("SG300", "SKG", "Phu Quoc", "2026-06-10 13:00", "2026-06-10 15:00");
     assignAircraft("SG300", "VN-SKY900");
     assignGate("SG300", "");
     bookPassenger("SG300", "PX004");

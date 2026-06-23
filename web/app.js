@@ -650,7 +650,7 @@ function setOpts(sel, html) {
   if ([...el.options].some((o) => o.value === prev)) el.value = prev;
 }
 
-// Thành phố đích từ sân bay nhà PHG + thời lượng bay (phút) -> dùng để tự tính giờ đến.
+// Thành phố đích từ sân bay nhà SKG + thời lượng bay (phút) -> dùng để tự tính giờ đến.
 const CITY_DURATIONS = [
   { name: "Ha Noi", min: 120 },
   { name: "Da Nang", min: 60 },

@@ -12,7 +12,7 @@ let weatherOverlays = [];
 
 // Tọa độ địa lý của các sân bay tại Việt Nam
 const AIRPORT_COORDS = {
-  PHG: [21.2212, 105.8072],   // Sân bay Quốc tế Phương Hoàng (Hà Nội)
+  SKG: [21.2212, 105.8072],   // Sân bay Quốc tế SkyGate (Hà Nội)
   CLG: [10.8184, 106.6588],   // Sân bay Quốc tế Cửu Long (TP.HCM)
   HAU: [10.2244, 103.9608],   // Sân bay Đảo Hải Âu (Phú Quốc)
   MHA: [22.3364, 103.8438]    // Sân bay Thung Lũng Mường Hoa (Sa Pa)
