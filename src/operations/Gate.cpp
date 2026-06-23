@@ -8,13 +8,7 @@ int Gate::rank() const {
     return Aircraft::gateRank(type_);
 }
 
-bool Gate::isFreeDuring(const DateTime& start, const DateTime& end) const {
-    if (!start.isValid() || !end.isValid()) return false;
-    for (const auto& r : reservations_) {
-        if (DateTime::overlaps(start, end, r.start, r.end)) {
-            return false;
-        }
-    }
+bool Gate::isFreeDuring(const DateTime& /*start*/, const DateTime& /*end*/) const {
     return true;
 }
 

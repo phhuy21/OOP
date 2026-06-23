@@ -32,10 +32,6 @@ std::vector<std::string> splitList(const std::string& s) {
     return out;
 }
 
-std::string joinList(const std::vector<std::string>& items) {
-    return utils::join(items, ',');
-}
-
 // --- Sơ đồ ghế: 6 cột A-F, số hàng = ceil(sốGhế/6), tối đa 100 ghế. ---
 constexpr int kSeatCols = 6;
 constexpr int kMaxSeats = 100;
@@ -275,13 +271,12 @@ OpResult AirportSystem::assignAircraft(const std::string& flightCode,
         if (other->code() == flightCode) continue;
         if (other->isFinished()) continue;
         if (other->aircraft() && other->aircraft()->registration() == registration) {
-            int turnaround = ac->minTurnaroundMinutes();
+            int turnaround = 0; // Đã bỏ thời gian quay đầu
             if (!(f->arrival().addMinutes(turnaround) <= other->departure() ||
                   other->arrival().addMinutes(turnaround) <= f->departure())) {
                 return OpResult::failure("Máy bay " + registration + " đang bận thực hiện chuyến bay " +
                                          other->code() + " (Lịch bay: " + other->departure().toString() + 
-                                         " -> " + other->arrival().toString() + ", cần thời gian quay đầu " + 
-                                         std::to_string(turnaround) + " phút).");
+                                         " -> " + other->arrival().toString() + ").");
             }
         }
     }
@@ -312,8 +307,7 @@ OpResult AirportSystem::assignCrew(const std::string& flightCode, const std::str
 }
 
 void AirportSystem::gateWindow(const Flight& flight, DateTime& outStart, DateTime& outEnd) {
-    long long turnaround = 60;  // mặc định nếu chưa gán máy bay
-    if (flight.aircraft()) turnaround = flight.aircraft()->minTurnaroundMinutes();
+    long long turnaround = 0;  // Đã bỏ thời gian quay đầu
     outStart = flight.departure().addMinutes(-turnaround);
     outEnd = flight.departure().addMinutes(30);
 }
@@ -894,9 +888,10 @@ int AirportSystem::simulateBadWeather(const std::string& airportCode, const std:
 }
 
 // ===========================================================================
-//  Lưu / đọc file
+//  Lưu / đọc dữ liệu (SQLite WAL mode)
 // ===========================================================================
 namespace {
+
 std::vector<std::string> readLines(const std::string& path) {
     std::vector<std::string> lines;
     std::ifstream in(path);
@@ -908,129 +903,499 @@ std::vector<std::string> readLines(const std::string& path) {
     }
     return lines;
 }
+
 std::string dtStore(const DateTime& dt) { return dt.isValid() ? dt.toString() : ""; }
-}  // namespace
 
-OpResult AirportSystem::saveAll(const std::string& dir) {
-    std::error_code ec;
-    fs::create_directories(dir, ec);
-    if (ec) return OpResult::failure("Không tạo được thư mục dữ liệu: " + dir);
-
-    auto open = [&](const std::string& f) { return std::ofstream(dir + "/" + f); };
-
-    // airports / runways / gates
-    {
-        std::ofstream a = open("airports.txt");
-        std::ofstream r = open("runways.txt");
-        std::ofstream g = open("gates.txt");
-        for (auto& ap : airports_) {
-            a << buildRecord({ap->code(), ap->name(), ap->note()}) << "\n";
-            for (auto& rw : ap->runways())
-                r << buildRecord({ap->code(), rw.code(), std::to_string(rw.lengthMeters())}) << "\n";
-            for (auto& ga : ap->gates())
-                g << buildRecord({ap->code(), ga.code(), toString(ga.type())}) << "\n";
-        }
-    }
-    // aircraft
-    {
-        std::ofstream o = open("aircraft.txt");
-        for (auto& ac : aircrafts_)
-            o << buildRecord({toString(ac->category()), ac->registration(), ac->model(),
-                              std::to_string(ac->capacity())}) << "\n";
-    }
-    // pilots
-    {
-        std::ofstream o = open("pilots.txt");
-        for (auto& p : pilots_) {
-            std::ostringstream hours;
-            hours << p->monthlyFlightHours();
-            o << buildRecord({p->id(), p->fullName(), std::to_string(p->age()), p->phone(),
-                              p->baseAirport(), p->certificationList(), hours.str(),
-                              dtStore(p->lastFlightEnd())}) << "\n";
-        }
-    }
-    // ground staff
-    {
-        std::ofstream o = open("groundstaff.txt");
-        for (auto& g : ground_)
-            o << buildRecord({g->id(), g->fullName(), std::to_string(g->age()), g->phone(),
-                              g->baseAirport(), g->department()}) << "\n";
-    }
-    // passengers
-    {
-        std::ofstream o = open("passengers.txt");
-        for (auto& p : passengers_) {
-            std::ostringstream w;
-            w << p->baggage().totalWeightKg();
-            o << buildRecord({p->id(), p->fullName(), std::to_string(p->age()), p->phone(),
-                              p->passport(), p->flightCode(), p->seat(),
-                              p->checkedIn() ? "1" : "0", p->boarded() ? "1" : "0",
-                              std::to_string(p->baggage().pieces()), w.str()}) << "\n";
-        }
-    }
-    // crews
-    {
-        std::ofstream o = open("crews.txt");
-        for (auto& c : crews_) {
-            std::vector<std::string> pids, gids;
-            for (auto& p : c->pilots()) pids.push_back(p->id());
-            for (auto& g : c->groundStaff()) gids.push_back(g->id());
-            o << buildRecord({c->id(), joinList(pids), joinList(gids)}) << "\n";
-        }
-    }
-    // flights
-    {
-        std::ofstream o = open("flights.txt");
-        for (auto& f : flights_) {
-            std::vector<std::string> pids;
-            for (auto& p : f->passengers()) pids.push_back(p->id());
-            o << buildRecord({f->code(), f->originCode(), f->destCode(),
-                              dtStore(f->departure()), dtStore(f->arrival()),
-                              toString(f->status()), f->emergency() ? "1" : "0", f->note(),
-                              f->aircraft() ? f->aircraft()->registration() : "",
-                              f->crew() ? f->crew()->id() : "",
-                              f->gateCode(), joinList(pids)}) << "\n";
-        }
-    }
-    // queues
-    {
-        std::ofstream o = open("queues.txt");
-        o << buildRecord({"DEP", joinList(departureQueue_)}) << "\n";
-        o << buildRecord({"ARR", joinList(arrivalQueue_)}) << "\n";
-    }
-    // users (tài khoản đăng nhập)
-    {
-        std::ofstream o = open("users.txt");
-        for (auto& u : users_)
-            o << buildRecord({u->role(), u->username(), u->password(), u->fullName()}) << "\n";
-    }
-    // tickets (vé đã bán)
-    {
-        std::ofstream o = open("tickets.txt");
-        o << buildRecord({"COUNTER", std::to_string(ticketCounter_)}) << "\n";
-        for (auto& t : tickets_)
-            o << buildRecord({t->ticketId(), t->flightCode(), t->passengerId(),
-                              t->passengerName(), t->ownerUsername(), t->seatClass()}) << "\n";
-    }
-    // simulation time (thời gian mô phỏng)
-    {
-        std::ofstream o = open("simulation_time.txt");
-        if (simulationTime_.isValid()) {
-            o << simulationTime_.toString() << "\n";
-        }
-    }
-
-    return OpResult::success("Đã lưu toàn bộ dữ liệu vào thư mục '" + dir + "'.");
+// ---------------------------------------------------------------------------
+//  CREATE TABLE (gọi 1 lần khi mở db lần đầu)
+// ---------------------------------------------------------------------------
+OpResult createTables(Database& db) {
+    db.execute("CREATE TABLE IF NOT EXISTS airports ("
+               "code TEXT PRIMARY KEY, name TEXT NOT NULL, note TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS runways ("
+               "airport_code TEXT NOT NULL, code TEXT NOT NULL, length_meters INTEGER NOT NULL,"
+               "PRIMARY KEY (airport_code, code))");
+    db.execute("CREATE TABLE IF NOT EXISTS gates ("
+               "airport_code TEXT NOT NULL, code TEXT NOT NULL,"
+               "type TEXT NOT NULL DEFAULT 'RemoteStand',"
+               "PRIMARY KEY (airport_code, code))");
+    db.execute("CREATE TABLE IF NOT EXISTS aircraft ("
+               "registration TEXT PRIMARY KEY, category TEXT NOT NULL,"
+               "model TEXT NOT NULL, capacity INTEGER NOT NULL)");
+    db.execute("CREATE TABLE IF NOT EXISTS pilots ("
+               "id TEXT PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL,"
+               "phone TEXT NOT NULL DEFAULT '', base TEXT NOT NULL DEFAULT '',"
+               "certifications TEXT NOT NULL DEFAULT '', monthly_hours REAL NOT NULL DEFAULT 0.0,"
+               "last_flight_end TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS groundstaff ("
+               "id TEXT PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL,"
+               "phone TEXT NOT NULL DEFAULT '', base TEXT NOT NULL DEFAULT '',"
+               "department TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS passengers ("
+               "id TEXT PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL DEFAULT 0,"
+               "phone TEXT NOT NULL DEFAULT '', passport TEXT NOT NULL DEFAULT '',"
+               "flight_code TEXT NOT NULL DEFAULT '', seat TEXT NOT NULL DEFAULT '',"
+               "checked_in INTEGER NOT NULL DEFAULT 0, boarded INTEGER NOT NULL DEFAULT 0,"
+               "bag_pieces INTEGER NOT NULL DEFAULT 0, bag_weight REAL NOT NULL DEFAULT 0.0)");
+    db.execute("CREATE TABLE IF NOT EXISTS crews ("
+               "id TEXT PRIMARY KEY)");
+    db.execute("CREATE TABLE IF NOT EXISTS crew_pilots ("
+               "crew_id TEXT NOT NULL, pilot_id TEXT NOT NULL,"
+               "PRIMARY KEY (crew_id, pilot_id))");
+    db.execute("CREATE TABLE IF NOT EXISTS crew_ground ("
+               "crew_id TEXT NOT NULL, ground_id TEXT NOT NULL,"
+               "PRIMARY KEY (crew_id, ground_id))");
+    db.execute("CREATE TABLE IF NOT EXISTS flights ("
+               "code TEXT PRIMARY KEY, origin TEXT NOT NULL, dest TEXT NOT NULL,"
+               "departure TEXT NOT NULL, arrival TEXT NOT NULL,"
+               "status TEXT NOT NULL DEFAULT 'Scheduled', emergency INTEGER NOT NULL DEFAULT 0,"
+               "note TEXT NOT NULL DEFAULT '', aircraft_reg TEXT NOT NULL DEFAULT '',"
+               "crew_id TEXT NOT NULL DEFAULT '', gate_code TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS flight_passengers ("
+               "flight_code TEXT NOT NULL, passenger_id TEXT NOT NULL, pos INTEGER NOT NULL DEFAULT 0,"
+               "PRIMARY KEY (flight_code, passenger_id))");
+    db.execute("CREATE TABLE IF NOT EXISTS users ("
+               "role TEXT NOT NULL, username TEXT PRIMARY KEY,"
+               "password TEXT NOT NULL, full_name TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS tickets ("
+               "ticket_id TEXT PRIMARY KEY, flight_code TEXT NOT NULL DEFAULT '',"
+               "passenger_id TEXT NOT NULL DEFAULT '', passenger_name TEXT NOT NULL DEFAULT '',"
+               "owner_username TEXT NOT NULL DEFAULT '', seat_class TEXT NOT NULL DEFAULT 'Thường')");
+    db.execute("CREATE TABLE IF NOT EXISTS queues ("
+               "type TEXT NOT NULL, pos INTEGER NOT NULL DEFAULT 0, code TEXT NOT NULL,"
+               "PRIMARY KEY (type, pos))");
+    db.execute("CREATE TABLE IF NOT EXISTS metadata ("
+               "key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')");
+    db.execute("CREATE TABLE IF NOT EXISTS event_log ("
+               "id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT NOT NULL, text TEXT NOT NULL)");
+    return OpResult::success();
 }
 
-OpResult AirportSystem::loadAll(const std::string& dir) {
-    if (!fs::exists(dir)) return OpResult::failure("Thư mục dữ liệu không tồn tại: " + dir);
+// Xoá toàn bộ dữ liệu cũ trong db (theo thứ tự ngược phụ thuộc).
+OpResult clearTables(Database& db) {
+    db.execute("DELETE FROM event_log");
+    db.execute("DELETE FROM flight_passengers");
+    db.execute("DELETE FROM crew_pilots");
+    db.execute("DELETE FROM crew_ground");
+    db.execute("DELETE FROM queues");
+    db.execute("DELETE FROM tickets");
+    db.execute("DELETE FROM flights");
+    db.execute("DELETE FROM crews");
+    db.execute("DELETE FROM passengers");
+    db.execute("DELETE FROM groundstaff");
+    db.execute("DELETE FROM pilots");
+    db.execute("DELETE FROM aircraft");
+    db.execute("DELETE FROM runways");
+    db.execute("DELETE FROM gates");
+    db.execute("DELETE FROM users");
+    db.execute("DELETE FROM airports");
+    db.execute("DELETE FROM metadata");
+    return OpResult::success();
+}
 
-    // Xoá dữ liệu hiện tại.
+}  // namespace
+
+// =================================== saveToDatabase ========================
+OpResult AirportSystem::saveToDatabase(const std::string& dir) {
+    std::string dbPath = dir + "/skygate.db";
+    OpResult openResult = db_.open(dbPath);
+    if (!openResult.ok) return openResult;
+
+    OpResult tblResult = createTables(db_);
+    if (!tblResult.ok) return tblResult;
+
+    return db_.transaction([&]() -> OpResult {
+        OpResult clearResult = clearTables(db_);
+        if (!clearResult.ok) return clearResult;
+
+        // --- Airports ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO airports(code, name, note) VALUES(?1, ?2, ?3)");
+            for (auto& ap : airports_) {
+                stmt.bindText(1, ap->code()).bindText(2, ap->name()).bindText(3, ap->note());
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Runways ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO runways(airport_code, code, length_meters) VALUES(?1, ?2, ?3)");
+            for (auto& ap : airports_)
+                for (auto& rw : ap->runways()) {
+                    stmt.bindText(1, ap->code()).bindText(2, rw.code())
+                         .bindInt(3, rw.lengthMeters());
+                    OpResult r = stmt.execute(); if (!r.ok) return r;
+                }
+        }
+        // --- Gates ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO gates(airport_code, code, type) VALUES(?1, ?2, ?3)");
+            for (auto& ap : airports_)
+                for (auto& ga : ap->gates()) {
+                    stmt.bindText(1, ap->code()).bindText(2, ga.code())
+                         .bindText(3, toString(ga.type()));
+                    OpResult r = stmt.execute(); if (!r.ok) return r;
+                }
+        }
+        // --- Aircraft ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO aircraft(registration, category, model, capacity) "
+                "VALUES(?1, ?2, ?3, ?4)");
+            for (auto& ac : aircrafts_) {
+                stmt.bindText(1, ac->registration()).bindText(2, toString(ac->category()))
+                     .bindText(3, ac->model()).bindInt(4, ac->capacity());
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Pilots ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO pilots(id, name, age, phone, base, certifications, "
+                "monthly_hours, last_flight_end) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)");
+            for (auto& p : pilots_) {
+                stmt.bindText(1, p->id()).bindText(2, p->fullName())
+                     .bindInt(3, p->age()).bindText(4, p->phone())
+                     .bindText(5, p->baseAirport())
+                     .bindText(6, p->certificationList())
+                     .bindDouble(7, p->monthlyFlightHours())
+                     .bindText(8, dtStore(p->lastFlightEnd()));
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Ground staff ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO groundstaff(id, name, age, phone, base, department) "
+                "VALUES(?1, ?2, ?3, ?4, ?5, ?6)");
+            for (auto& g : ground_) {
+                stmt.bindText(1, g->id()).bindText(2, g->fullName())
+                     .bindInt(3, g->age()).bindText(4, g->phone())
+                     .bindText(5, g->baseAirport()).bindText(6, g->department());
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Passengers ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO passengers(id, name, age, phone, passport, flight_code, "
+                "seat, checked_in, boarded, bag_pieces, bag_weight) "
+                "VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)");
+            for (auto& p : passengers_) {
+                stmt.bindText(1, p->id()).bindText(2, p->fullName())
+                     .bindInt(3, p->age()).bindText(4, p->phone())
+                     .bindText(5, p->passport())
+                     .bindText(6, p->flightCode()).bindText(7, p->seat())
+                     .bindInt(8, p->checkedIn() ? 1 : 0)
+                     .bindInt(9, p->boarded() ? 1 : 0)
+                     .bindInt(10, p->baggage().pieces())
+                     .bindDouble(11, p->baggage().totalWeightKg());
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Crews + junction tables ---
+        {
+            auto stmtC = db_.prepare("INSERT INTO crews(id) VALUES(?1)");
+            auto stmtP = db_.prepare("INSERT INTO crew_pilots(crew_id, pilot_id) VALUES(?1, ?2)");
+            auto stmtG = db_.prepare("INSERT INTO crew_ground(crew_id, ground_id) VALUES(?1, ?2)");
+            for (auto& c : crews_) {
+                stmtC.bindText(1, c->id());
+                OpResult r = stmtC.execute(); if (!r.ok) return r;
+                for (auto& p : c->pilots()) {
+                    stmtP.bindText(1, c->id()).bindText(2, p->id());
+                    r = stmtP.execute(); if (!r.ok) return r;
+                }
+                for (auto& g : c->groundStaff()) {
+                    stmtG.bindText(1, c->id()).bindText(2, g->id());
+                    r = stmtG.execute(); if (!r.ok) return r;
+                }
+            }
+        }
+        // --- Flights + flight_passengers ---
+        {
+            auto stmtF = db_.prepare(
+                "INSERT INTO flights(code, origin, dest, departure, arrival, status, "
+                "emergency, note, aircraft_reg, crew_id, gate_code) "
+                "VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)");
+            auto stmtFP = db_.prepare(
+                "INSERT INTO flight_passengers(flight_code, passenger_id, pos) VALUES(?1, ?2, ?3)");
+            for (auto& f : flights_) {
+                stmtF.bindText(1, f->code()).bindText(2, f->originCode())
+                     .bindText(3, f->destCode())
+                     .bindText(4, dtStore(f->departure()))
+                     .bindText(5, dtStore(f->arrival()))
+                     .bindText(6, toString(f->status()))
+                     .bindInt(7, f->emergency() ? 1 : 0)
+                     .bindText(8, f->note())
+                     .bindText(9, f->aircraft() ? f->aircraft()->registration() : "")
+                     .bindText(10, f->crew() ? f->crew()->id() : "")
+                     .bindText(11, f->gateCode());
+                OpResult r = stmtF.execute(); if (!r.ok) return r;
+                int pos = 0;
+                for (auto& p : f->passengers()) {
+                    stmtFP.bindText(1, f->code()).bindText(2, p->id()).bindInt(3, pos++);
+                    r = stmtFP.execute(); if (!r.ok) return r;
+                }
+            }
+        }
+        // --- Queues ---
+        {
+            auto stmt = db_.prepare("INSERT INTO queues(type, pos, code) VALUES(?1, ?2, ?3)");
+            for (size_t i = 0; i < departureQueue_.size(); ++i) {
+                stmt.bindText(1, "DEP").bindInt(2, static_cast<int>(i))
+                     .bindText(3, departureQueue_[i]);
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+            for (size_t i = 0; i < arrivalQueue_.size(); ++i) {
+                stmt.bindText(1, "ARR").bindInt(2, static_cast<int>(i))
+                     .bindText(3, arrivalQueue_[i]);
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Users ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO users(role, username, password, full_name) VALUES(?1, ?2, ?3, ?4)");
+            for (auto& u : users_) {
+                stmt.bindText(1, u->role()).bindText(2, u->username())
+                     .bindText(3, u->password()).bindText(4, u->fullName());
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Tickets ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT OR REPLACE INTO metadata(key, value) VALUES(?1, ?2)");
+            stmt.bindText(1, "ticket_counter").bindText(2, std::to_string(ticketCounter_));
+            OpResult r = stmt.execute(); if (!r.ok) return r;
+
+            auto stmtT = db_.prepare(
+                "INSERT INTO tickets(ticket_id, flight_code, passenger_id, "
+                "passenger_name, owner_username, seat_class) VALUES(?1, ?2, ?3, ?4, ?5, ?6)");
+            for (auto& t : tickets_) {
+                stmtT.bindText(1, t->ticketId()).bindText(2, t->flightCode())
+                     .bindText(3, t->passengerId()).bindText(4, t->passengerName())
+                     .bindText(5, t->ownerUsername()).bindText(6, t->seatClass());
+                r = stmtT.execute(); if (!r.ok) return r;
+            }
+        }
+        // --- Simulation time ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT OR REPLACE INTO metadata(key, value) VALUES(?1, ?2)");
+            stmt.bindText(1, "simulation_time")
+                 .bindText(2, simulationTime_.isValid() ? simulationTime_.toString() : "");
+            OpResult r = stmt.execute(); if (!r.ok) return r;
+        }
+        // --- Event log ---
+        {
+            auto stmt = db_.prepare(
+                "INSERT INTO event_log(time, text) VALUES(?1, ?2)");
+            for (auto& e : eventLog_) {
+                stmt.bindText(1, e.time).bindText(2, e.text);
+                OpResult r = stmt.execute(); if (!r.ok) return r;
+            }
+        }
+
+        return OpResult::success();
+    }) ? OpResult::success("Đã lưu toàn bộ dữ liệu vào '" + dir + "'.")
+       : OpResult::failure("Lỗi khi lưu dữ liệu.");
+}
+
+// =================================== loadFromDatabase ======================
+OpResult AirportSystem::loadFromDatabase(const std::string& dir) {
+    std::string dbPath = dir + "/skygate.db";
+    OpResult openResult = db_.open(dbPath);
+    if (!openResult.ok) return openResult;
+
+    OpResult tblResult = createTables(db_);
+    if (!tblResult.ok) return tblResult;
+
+    // Xoá trạng thái cũ trước khi nạp.
     airports_.clear(); aircrafts_.clear(); pilots_.clear(); ground_.clear();
     passengers_.clear(); crews_.clear(); flights_.clear();
     users_.clear(); tickets_.clear(); ticketCounter_ = 0;
     departureQueue_.clear(); arrivalQueue_.clear();
+    eventLog_.clear();
+
+    // Nạp theo thứ tự phụ thuộc (giống thứ tự file .txt cũ).
+    db_.query("SELECT code, name, note FROM airports",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 3) addAirport(vals[0] ? vals[0] : "",
+                                       vals[1] ? vals[1] : "",
+                                       vals[2] ? vals[2] : "");
+        });
+    db_.query("SELECT airport_code, code, length_meters FROM runways",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 3) addRunway(vals[0] ? vals[0] : "",
+                                      vals[1] ? vals[1] : "",
+                                      utils::toInt(vals[2] ? vals[2] : ""));
+        });
+    db_.query("SELECT airport_code, code, type FROM gates",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 3) addGate(vals[0] ? vals[0] : "",
+                                    vals[1] ? vals[1] : "",
+                                    gateTypeFromString(vals[2] ? vals[2] : ""));
+        });
+    db_.query("SELECT registration, category, model, capacity FROM aircraft",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 4) addAircraft(aircraftCategoryFromString(vals[1] ? vals[1] : ""),
+                                        vals[0] ? vals[0] : "",
+                                        vals[2] ? vals[2] : "",
+                                        utils::toInt(vals[3] ? vals[3] : ""));
+        });
+    db_.query("SELECT id, name, age, phone, base, certifications, monthly_hours, last_flight_end FROM pilots",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 8) {
+                addPilot(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                          utils::toInt(vals[2] ? vals[2] : ""),
+                          vals[3] ? vals[3] : "", vals[4] ? vals[4] : "");
+                auto p = findPilot(vals[0] ? vals[0] : "");
+                if (p) {
+                    std::string certs = vals[5] ? vals[5] : "";
+                    for (auto& cert : utils::split(certs, ';')) {
+                        std::string t = utils::trim(cert);
+                        if (!t.empty()) p->addCertification(aircraftCategoryFromString(t));
+                    }
+                    p->setMonthlyFlightHours(utils::toDouble(vals[6] ? vals[6] : ""));
+                    DateTime last = DateTime::parse(vals[7] ? vals[7] : "");
+                    if (last.isValid()) p->setLastFlightEnd(last);
+                }
+            }
+        });
+    db_.query("SELECT id, name, age, phone, base, department FROM groundstaff",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 6) addGroundStaff(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                                           utils::toInt(vals[2] ? vals[2] : ""),
+                                           vals[3] ? vals[3] : "", vals[4] ? vals[4] : "",
+                                           vals[5] ? vals[5] : "");
+        });
+    db_.query("SELECT id, name, age, phone, passport, flight_code, seat, checked_in, boarded, bag_pieces, bag_weight FROM passengers",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 11) {
+                addPassenger(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                              utils::toInt(vals[2] ? vals[2] : ""),
+                              vals[3] ? vals[3] : "", vals[4] ? vals[4] : "");
+                auto p = findPassenger(vals[0] ? vals[0] : "");
+                if (p) {
+                    p->setFlightCode(vals[5] ? vals[5] : "");
+                    p->setSeat(vals[6] ? vals[6] : "");
+                    p->setCheckedIn(utils::toBool(vals[7] ? vals[7] : ""));
+                    p->setBoarded(utils::toBool(vals[8] ? vals[8] : ""));
+                    p->setBaggage(Baggage(utils::toInt(vals[9] ? vals[9] : ""),
+                                          utils::toDouble(vals[10] ? vals[10] : "")));
+                }
+            }
+        });
+    db_.query("SELECT id FROM crews",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 1) createCrew(vals[0] ? vals[0] : "");
+        });
+    db_.query("SELECT crew_id, pilot_id FROM crew_pilots",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 2) addPilotToCrew(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "");
+        });
+    db_.query("SELECT crew_id, ground_id FROM crew_ground",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 2) addGroundToCrew(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "");
+        });
+    db_.query("SELECT code, origin, dest, departure, arrival, status, emergency, note, aircraft_reg, crew_id, gate_code FROM flights",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 11) {
+                createFlight(vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                              vals[2] ? vals[2] : "", vals[3] ? vals[3] : "",
+                              vals[4] ? vals[4] : "");
+                auto f = findFlight(vals[0] ? vals[0] : "");
+                if (f) {
+                    f->setStatus(flightStatusFromString(vals[5] ? vals[5] : ""));
+                    f->setEmergency(utils::toBool(vals[6] ? vals[6] : ""));
+                    f->setNote(vals[7] ? vals[7] : "");
+                    if (vals[8] && *vals[8]) f->setAircraft(findAircraft(vals[8]));
+                    if (vals[9] && *vals[9]) f->setCrew(findCrew(vals[9]));
+                    f->setGateCode(vals[10] ? vals[10] : "");
+                }
+            }
+        });
+    // flight_passengers — nạp sau flights để addPassenger tìm được passengers
+    db_.query("SELECT flight_code, passenger_id FROM flight_passengers ORDER BY pos",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 2) {
+                auto f = findFlight(vals[0] ? vals[0] : "");
+                auto p = findPassenger(vals[1] ? vals[1] : "");
+                if (f && p) f->addPassenger(p);
+            }
+        });
+    // Queues
+    {
+        std::vector<std::pair<int, std::string>> deps, arrs;  // pos, code
+        db_.query("SELECT type, pos, code FROM queues ORDER BY type, pos",
+            [&](int argc, char** vals, char**) {
+                if (argc >= 3) {
+                    std::string t = vals[0] ? vals[0] : "";
+                    int pos = utils::toInt(vals[1] ? vals[1] : "0");
+                    std::string code = vals[2] ? vals[2] : "";
+                    if (t == "DEP") deps.emplace_back(pos, code);
+                    else if (t == "ARR") arrs.emplace_back(pos, code);
+                }
+            });
+        std::sort(deps.begin(), deps.end());
+        std::sort(arrs.begin(), arrs.end());
+        for (auto& d : deps) departureQueue_.push_back(d.second);
+        for (auto& a : arrs) arrivalQueue_.push_back(a.second);
+    }
+    // Users
+    db_.query("SELECT role, username, password, full_name FROM users",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 4)
+                users_.push_back(auth::makeUser(vals[0] ? vals[0] : "",
+                                                 vals[1] ? vals[1] : "",
+                                                 vals[2] ? vals[2] : "",
+                                                 vals[3] ? vals[3] : ""));
+        });
+    // Tickets
+    db_.query("SELECT ticket_id, flight_code, passenger_id, passenger_name, owner_username, seat_class FROM tickets",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 6)
+                tickets_.push_back(std::make_shared<Ticket>(
+                    vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                    vals[2] ? vals[2] : "", vals[3] ? vals[3] : "",
+                    vals[4] ? vals[4] : "", vals[5] ? vals[5] : ""));
+            else if (argc >= 5)
+                tickets_.push_back(std::make_shared<Ticket>(
+                    vals[0] ? vals[0] : "", vals[1] ? vals[1] : "",
+                    vals[2] ? vals[2] : "", vals[3] ? vals[3] : "",
+                    vals[4] ? vals[4] : ""));
+        });
+    // Metadata: ticket_counter, simulation_time
+    {
+        auto rows = db_.queryAll("SELECT key, value FROM metadata");
+        for (auto& r : rows) {
+            if (r.size() >= 2) {
+                if (r[0] == "ticket_counter") ticketCounter_ = utils::toInt(r[1]);
+                else if (r[0] == "simulation_time" && !r[1].empty()) {
+                    DateTime dt = DateTime::parse(r[1]);
+                    if (dt.isValid()) simulationTime_ = dt;
+                }
+            }
+        }
+    }
+    // Event log
+    db_.query("SELECT time, text FROM event_log ORDER BY id",
+        [&](int argc, char** vals, char**) {
+            if (argc >= 2) eventLog_.push_back({vals[0] ? vals[0] : "", vals[1] ? vals[1] : ""});
+        });
+
+    rebuildGateReservations();
+    return OpResult::success("Đã đọc dữ liệu từ cơ sở dữ liệu '" + dir + "'.");
+}
+
+// =================================== migrateFromTxt ========================
+OpResult AirportSystem::migrateFromTxt(const std::string& dir) {
+    // Đọc toàn bộ dữ liệu từ file .txt cũ bằng logic parseRecord gốc.
+    // loadAll cũ đã clear state trước khi gọi; migrateFromTxt được gọi từ loadAll
+    // sau khi state đã được clear.
 
     auto path = [&](const std::string& f) { return dir + "/" + f; };
 
@@ -1133,18 +1498,73 @@ OpResult AirportSystem::loadAll(const std::string& dir) {
             tickets_.push_back(std::make_shared<Ticket>(r[0], r[1], r[2], r[3], r[4]));
         }
     }
-
-    // simulation time (thời gian mô phỏng)
     simulationTime_ = DateTime();
     for (auto& line : readLines(path("simulation_time.txt"))) {
         DateTime dt = DateTime::parse(line);
-        if (dt.isValid()) {
-            simulationTime_ = dt;
+        if (dt.isValid()) simulationTime_ = dt;
+    }
+    rebuildGateReservations();
+
+    // Lưu vào SQLite.
+    OpResult saveResult = saveToDatabase(dir);
+    if (!saveResult.ok) return OpResult::failure("Di trú .txt -> SQLite thất bại: " + saveResult.message);
+
+    // Đổi tên file .txt -> .txt.bak.
+    const char* txtFiles[] = {
+        "airports.txt", "runways.txt", "gates.txt", "aircraft.txt",
+        "pilots.txt", "groundstaff.txt", "passengers.txt", "crews.txt",
+        "flights.txt", "queues.txt", "users.txt", "tickets.txt",
+        "simulation_time.txt"
+    };
+    for (const char* f : txtFiles) {
+        std::string src = dir + "/" + f;
+        std::string dst = src + ".bak";
+        std::error_code ec;
+        if (fs::exists(src, ec)) {
+            fs::rename(src, dst, ec);
+            // Nếu rename lỗi (file đang mở, permission...), vẫn tiếp tục.
         }
     }
 
-    rebuildGateReservations();
-    return OpResult::success("Đã đọc dữ liệu từ thư mục '" + dir + "'.");
+    return OpResult::success("Đã chuyển đổi dữ liệu từ .txt sang SQLite.");
+}
+
+// =================================== saveAll ===============================
+OpResult AirportSystem::saveAll(const std::string& dir) {
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) return OpResult::failure("Không tạo được thư mục dữ liệu: " + dir);
+    return saveToDatabase(dir);
+}
+
+// =================================== loadAll ================================
+OpResult AirportSystem::loadAll(const std::string& dir) {
+    std::string dbPath = dir + "/skygate.db";
+    bool dbExists = fs::exists(dbPath);
+    bool txtExists = fs::exists(dir + "/airports.txt");
+
+    if (!dbExists && !txtExists) {
+        return OpResult::failure("Thư mục dữ liệu không tồn tại hoặc trống: " + dir);
+    }
+
+    // Di trú một lần: .txt -> .db
+    if (!dbExists && txtExists) {
+        // Xoá trạng thái trước khi đọc .txt.
+        airports_.clear(); aircrafts_.clear(); pilots_.clear(); ground_.clear();
+        passengers_.clear(); crews_.clear(); flights_.clear();
+        users_.clear(); tickets_.clear(); ticketCounter_ = 0;
+        departureQueue_.clear(); arrivalQueue_.clear();
+        eventLog_.clear();
+        simulationTime_ = DateTime();
+
+        OpResult migrateResult = migrateFromTxt(dir);
+        if (!migrateResult.ok) return migrateResult;
+        // migrateFromTxt đã gọi saveToDatabase và đổi tên file.
+        // Đóng db để loadFromDatabase mở lại sạch.
+        db_.close();
+    }
+
+    return loadFromDatabase(dir);
 }
 
 void AirportSystem::rebuildGateReservations() {

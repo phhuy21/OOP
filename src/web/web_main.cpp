@@ -170,9 +170,10 @@ int main(int argc, char** argv) {
     const std::string kDataDir = "data";
 
     sg::AirportSystem system;
-    // Kiểm tra xem đã có thư mục dữ liệu và tệp tin airports.txt chưa (để nhận biết cơ sở dữ liệu đã khởi tạo)
-    bool hasData = std::filesystem::exists(kDataDir) && std::filesystem::exists(kDataDir + "/airports.txt");
-    if (hasData) {
+    // Kiểm tra xem đã có cơ sở dữ liệu SQLite hoặc file .txt cũ chưa
+    bool hasDb = std::filesystem::exists(kDataDir) && std::filesystem::exists(kDataDir + "/skygate.db");
+    bool hasTxt = std::filesystem::exists(kDataDir) && std::filesystem::exists(kDataDir + "/airports.txt");
+    if (hasDb || hasTxt) {
         if (system.loadAll(kDataDir).ok) {
             system.seedDefaultAccounts();
             system.saveAll(kDataDir);

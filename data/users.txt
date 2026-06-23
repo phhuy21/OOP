@@ -1,3 +1,0 @@
-Admin|admin|admin123|Quan tri vien
-Staff|staff|staff123|Nhan vien quay ve
-Customer|customer|cus123|Khach hang

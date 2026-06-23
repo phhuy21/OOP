@@ -704,7 +704,7 @@ function updateAvailableAircrafts() {
         const otherDep = parseDateStr(f.departure);
         const otherArr = parseDateStr(f.arrival);
         if (otherDep && otherArr) {
-          const turnaroundMs = a.turnaround * 60000;
+          const turnaroundMs = 0; // Đã bỏ thời gian quay đầu
           const newArrWithTurnaround = new Date(newArr.getTime() + turnaroundMs);
           const otherArrWithTurnaround = new Date(otherArr.getTime() + turnaroundMs);
           if (!(newArrWithTurnaround <= otherDep || otherArrWithTurnaround <= newDep)) {

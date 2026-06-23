@@ -34,3 +34,6 @@ Thumbs.db
 
 # Runtime data files
 data/simulation_time.txt
+data/skygate.db
+data/skygate.db-wal
+data/skygate.db-shm

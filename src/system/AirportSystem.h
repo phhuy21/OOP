@@ -8,6 +8,7 @@
 #include "../aircraft/Aircraft.h"
 #include "../auth/User.h"
 #include "../common/DateTime.h"
+#include "../common/Database.h"
 #include "../common/Enums.h"
 #include "../common/OpResult.h"
 #include "../operations/Airport.h"
@@ -177,6 +178,12 @@ private:
     FlightStatus targetStatusFor(const Flight& f) const;
     static int lifecycleOrdinal(FlightStatus s);
 
+    // SQLite persistence helpers.
+    OpResult saveToDatabase(const std::string& dir);
+    OpResult loadFromDatabase(const std::string& dir);
+    OpResult migrateFromTxt(const std::string& dir);
+
+    Database db_;
     std::vector<std::shared_ptr<Airport>> airports_;
     std::vector<std::shared_ptr<Aircraft>> aircrafts_;
     std::vector<std::shared_ptr<Pilot>> pilots_;

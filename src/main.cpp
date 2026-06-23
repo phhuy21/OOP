@@ -375,10 +375,15 @@ int main() {
     AirportSystem sys;
 
     // Tự động đọc dữ liệu nếu đã có.
-    if (std::ifstream exists(kDataDir + "/airports.txt"); exists.good()) {
+    if (std::ifstream exists(kDataDir + "/skygate.db"); exists.good()) {
         exists.close();
         OpResult r = sys.loadAll(kDataDir);
         std::cout << (r.ok ? "[Đã nạp dữ liệu sẵn có] " : "") << r.message << "\n";
+    } else if (std::ifstream exists(kDataDir + "/airports.txt"); exists.good()) {
+        exists.close();
+        // Dữ liệu .txt cũ — loadAll sẽ tự động di trú sang SQLite.
+        OpResult r = sys.loadAll(kDataDir);
+        std::cout << (r.ok ? "[Đã chuyển đổi dữ liệu .txt sang SQLite] " : "") << r.message << "\n";
     } else if (readYesNo("Chưa có dữ liệu. Nạp dữ liệu mẫu?")) {
         sys.seedDemoData();
         std::cout << "[OK] Đã nạp dữ liệu mẫu.\n";

@@ -15,7 +15,7 @@ public:
 
     AircraftCategory category() const override { return AircraftCategory::WideBody; }
     int requiredRunwayLength() const override { return 2800; }
-    int minTurnaroundMinutes() const override { return 90; }
+    int minTurnaroundMinutes() const override { return 0; }
     GateType preferredGateType() const override { return GateType::DoubleJetBridge; }
     int minGateRank() const override { return 2; }
 };

@@ -15,7 +15,7 @@ public:
 
     AircraftCategory category() const override { return AircraftCategory::Turboprop; }
     int requiredRunwayLength() const override { return 1500; }
-    int minTurnaroundMinutes() const override { return 30; }
+    int minTurnaroundMinutes() const override { return 0; }
     GateType preferredGateType() const override { return GateType::RemoteStand; }
     int minGateRank() const override { return 0; }
 };
