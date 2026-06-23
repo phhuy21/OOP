@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="Electron" version="21.0.0" type="device">
+  <diagram id="page_class" name="Hình 3.1 — Sơ đồ lớp (Class Diagram)">
+    <mxGraphModel dx="1200" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="cc1" value="MODULE CON NGƯỜI (people/)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="30" width="340" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_person" value="Person (Abstract)&lt;br&gt;- id_, fullName_, age_&lt;br&gt;+ role()*: string" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="65" width="140" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_passenger" value="Passenger&lt;br&gt;- passport_&lt;br&gt;+ checkIn(), board()" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="145" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_staff" value="Staff (Abstract)&lt;br&gt;- baseAirport_&lt;br&gt;+ salary(): float" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="145" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_pilot" value="Pilot&lt;br&gt;- certs_, hours_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="225" width="100" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_ground" value="GroundStaff&lt;br&gt;- department_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="225" width="80" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cc2" value="MODULE MÁY BAY (aircraft/)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="410" y="30" width="360" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_ac" value="Aircraft (Abstract)&lt;br&gt;- registration_, capacity_&lt;br&gt;+ requiredRunway()*: int&lt;br&gt;+ preferredGate()*: GateType" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="65" width="180" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_wide" value="WideBodyAircraft" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="155" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_narrow" value="NarrowBodyAircraft" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="155" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_turbo" value="TurbopropAircraft" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="155" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_acfac" value="AircraftFactory&lt;br&gt;+ create(category): Aircraft" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="225" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cc3" value="MODULE VẬN HÀNH DỊCH VỤ SÂN BAY (operations/)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="310" width="720" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_airport" value="Airport&lt;br&gt;- gates_, runways_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="345" width="110" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_flight" value="Flight (State Machine)&lt;br&gt;- code_, status_&lt;br&gt;- passengers_&lt;br&gt;+ advance()" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="345" width="150" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_gate" value="Gate&lt;br&gt;- reservations_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="345" width="90" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_runway" value="Runway&lt;br&gt;- lengthMeters_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="345" width="90" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_crew" value="Crew&lt;br&gt;- pilots_, ground_" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="590" y="345" width="100" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_ticket" value="Ticket&lt;br&gt;- ticket_id_, seat_class_&lt;br&gt;+ calculatePrice()" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="450" width="150" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_baggage" value="Baggage&lt;br&gt;- weight_, items_&lt;br&gt;+ isOverweight()" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="450" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="cc4" value="MODULE HỆ THỐNG ĐIỀU KHIỂN &amp; XÁC THỰC (system/ / auth/ / common/)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="560" width="720" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_as" value="AirportSystem&lt;br&gt;- flights_, aircraft_, airports_&lt;br&gt;- db_&lt;br&gt;+ createFlight(), saveAll()" style="html=1;whiteSpace=wrap;fillColor=#E1EBF5;strokeColor=#365F91;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="605" width="220" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_db" value="Database (SQLite wrapper)&lt;br&gt;- db_conn_&lt;br&gt;+ execute(), query()" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="605" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_user" value="auth::User (Abstract)&lt;br&gt;- username_, password_&lt;br&gt;+ role()*: string" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="605" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ei1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_passenger" target="cls_person" />
+        <mxCell id="ei2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_staff" target="cls_person" />
+        <mxCell id="ei3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_pilot" target="cls_staff" />
+        <mxCell id="ei4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_ground" target="cls_staff" />
+        <mxCell id="ei5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_wide" target="cls_ac" />
+        <mxCell id="ei6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_narrow" target="cls_ac" />
+        <mxCell id="ei7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=block;endFill=0;endSize=10;" edge="1" parent="1" source="cls_turbo" target="cls_ac" />
+        <mxCell id="ea1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=diamond;endFill=1;endSize=10;" edge="1" parent="1" source="cls_airport" target="cls_gate" />
+        <mxCell id="ea2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=diamond;endFill=1;endSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="cls_airport" target="cls_runway">
+          <mxGeometry relative="1" as="geometry"><Array points="125,410;525,410"/></mxGeometry>
+        </mxCell>
+        <mxCell id="ea3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=diamond;endFill=1;endSize=10;" edge="1" parent="1" source="cls_flight" target="cls_ac">
+          <mxGeometry relative="1" as="geometry"><Array points="275,305;590,305"/></mxGeometry>
+        </mxCell>
+        <mxCell id="ea4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;endArrow=diamond;endFill=1;endSize=10;" edge="1" parent="1" source="cls_passenger" target="cls_baggage">
+          <mxGeometry relative="1" as="geometry"><Array points="135,270;390,270;390,450"/></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="Electron" version="21.0.0" type="device">
+  <diagram id="page_architecture" name="Hình 3.3 — Kiến trúc hệ thống & Luồng xử lý">
+    <mxGraphModel dx="1200" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c1" value="KHỐI GIAO DIỆN / ĐẦU VÀO (PRESENTATION LAYER)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="30" width="550" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_web" value="Giao diện Web Trình duyệt&lt;br&gt;(HTML5 / CSS3 / Vanilla JS)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="65" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ui_cli" value="Giao diện dòng lệnh CLI&lt;br&gt;(Console C++ main.cpp)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="410" y="65" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" value="KHỐI XỬ LÝ SERVER &amp; PHÂN QUYỀN (WEB SERVER LAYER)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#365F91;strokeWidth=2;dashed=0;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="180" width="550" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_router" value="Bộ định tuyến REST API&lt;br&gt;(cpp-httplib Server / web_main.cpp)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="215" width="470" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_auth" value="Kiểm tra xác thực &amp; Phân quyền&lt;br&gt;(Admin / Staff / Customer)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="280" width="470" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_json" value="Bộ sinh phản hồi JSON (Json.h)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="340" width="470" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" value="KHỐI ĐIỀU KHIỂN &amp; XỬ LÝ NGHIỆP VỤ (BUSINESS LOGIC LAYER)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#365F91;strokeWidth=2;dashed=0;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="430" width="550" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="core_sys" value="BỘ ĐIỀU KHIỂN TRUNG TÂM (AirportSystem)" style="html=1;whiteSpace=wrap;fillColor=#E1EBF5;strokeColor=#365F91;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="465" width="470" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="core_rules" value="Kiểm tra tương thích hạ tầng &amp; ràng buộc máy bay (Aircraft/Gate/Runway)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="525" width="470" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="core_state" value="Quản lý vòng đời chuyến bay (Flight State Machine)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="580" width="470" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="core_ticket" value="Quản lý đặt vé, chọn sơ đồ ghế &amp; cảnh báo hành lý" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="635" width="470" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="core_sim" value="Mô phỏng Virtual Clock &amp; Hàng đợi cất/hạ cánh" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="140" y="685" width="470" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db_main" value="CSDL SQLite WAL&lt;br&gt;(data/skygate.db)" style="html=1;whiteSpace=wrap;shape=cylinder;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;bounds=[0,0,0,0];" vertex="1" parent="1">
+          <mxGeometry x="300" y="750" width="150" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="HTTP Request (Fetch API)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="ui_web" target="srv_router" />
+        <mxCell id="e2" value="Gọi trực tiếp C++ API" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ui_cli" target="core_sys" />
+        <mxCell id="e3" value="Đọc thông tin actor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="srv_router" target="srv_auth" />
+        <mxCell id="e4" value="Chuyển tiếp yêu cầu (public methods)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="srv_auth" target="core_sys" />
+        <mxCell id="e5" value="Phản hồi dữ liệu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;exitX=0.15;exitY=0;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="core_sys" target="srv_json" />
+        <mxCell id="e6" value="Phản hồi HTTP / JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="srv_json" target="ui_web">
+          <mxGeometry relative="1" as="geometry"><Array points="110,358;110,93"/></mxGeometry>
+        </mxCell>
+        <mxCell id="e7" value="Giao tiếp CSDL (Database.cpp / Prepared Statements)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#365F91;fontSize=11;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="core_sys" target="db_main" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

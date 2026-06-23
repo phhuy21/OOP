@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="Electron" version="21.0.0" type="device">
+  <diagram id="page_state" name="Hình 3.2 — Sơ đồ trạng thái chuyến bay (State Diagram)">
+    <mxGraphModel dx="1200" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="sc1" value="QUY TRÌNH CHUẨN BỊ / TIỀN KHỞI HÀNH (PRE-DEPARTURE)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="30" width="700" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="st_sched" value="Scheduled&lt;br&gt;(Lịch trình)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="65" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_check" value="CheckIn&lt;br&gt;(Mở quầy)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="65" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_board" value="Boarding&lt;br&gt;(Lên máy bay)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="350" y="65" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_gate" value="GateClosed&lt;br&gt;(Đóng cửa)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="65" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_ready" value="Ready&lt;br&gt;(Sẵn sàng)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="630" y="65" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="sc2" value="QUY TRÌNH VẬN HÀNH BAY (FLIGHT OPERATIONS)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#707070;strokeWidth=2;dashed=1;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="190" width="700" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="st_take" value="Takeoff&lt;br&gt;(Cất cánh)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="225" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_air" value="InAir&lt;br&gt;(Đang bay)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="225" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_land" value="Landed&lt;br&gt;(Hạ cánh)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="350" y="225" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_turn" value="Turnaround&lt;br&gt;(Quay đầu)" style="html=1;whiteSpace=wrap;fillColor=#F2F4F7;strokeColor=#365F91;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="225" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_comp" value="Completed&lt;br&gt;(Hoàn tất)" style="html=1;whiteSpace=wrap;fillColor=#E2F0D9;strokeColor=#385723;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="630" y="225" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="sc3" value="QUY TRÌNH XỬ LÝ SỰ CỐ / BẤT THƯỜNG (ANOMALY HANDLING)" style="html=1;whiteSpace=wrap;fillColor=none;strokeColor=#D99B00;strokeWidth=2;dashed=0;align=center;verticalAlign=top;fontStyle=1;fontSize=14;fontFamily=Helvetica;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="350" width="700" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="st_delay" value="Delayed&lt;br&gt;(Bị hoãn)" style="html=1;whiteSpace=wrap;fillColor=#FFF2CC;strokeColor=#D99B00;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="385" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="st_cancel" value="Cancelled&lt;br&gt;(Đã huỷ)" style="html=1;whiteSpace=wrap;fillColor=#FFF2CC;strokeColor=#D99B00;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="385" width="130" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="se1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_sched" target="st_check" />
+        <mxCell id="se2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_check" target="st_board" />
+        <mxCell id="se3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_gate" />
+        <mxCell id="se4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_gate" target="st_ready" />
+        <mxCell id="se5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_ready" target="st_take">
+          <mxGeometry relative="1" as="geometry"><Array points="675,150;115,150"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_take" target="st_air" />
+        <mxCell id="se7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_air" target="st_land" />
+        <mxCell id="se8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_land" target="st_turn" />
+        <mxCell id="se9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_turn" target="st_comp" />
+        <mxCell id="se_d1" value="Weather / Aircraft bận" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_sched" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="115,330;230,330"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_d2" value="Thời tiết xấu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_check" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="255,160;255,385"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_d3" value="Boarding muộn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_delay">
+          <mxGeometry relative="1" as="geometry"><Array points="395,160;290,160"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_d4" value="Tiếp tục sau hoãn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#365F91;fontSize=10;fontFamily=Helvetica;endArrow=block;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="st_delay" target="st_board" />
+        <mxCell id="se_c1" value="Huỷ chuyến" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_sched" target="st_cancel">
+          <mxGeometry relative="1" as="geometry"><Array points="90,160;90,440;470,440"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_c2" value="Sự cố kỹ thuật" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_check" target="st_cancel">
+          <mxGeometry relative="1" as="geometry"><Array points="230,170;490,170"/></mxGeometry>
+        </mxCell>
+        <mxCell id="se_c3" value="Đóng quầy sự cố" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#D99B00;fontSize=10;fontFamily=Helvetica;endArrow=block;" edge="1" parent="1" source="st_board" target="st_cancel" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
