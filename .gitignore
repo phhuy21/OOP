@@ -37,3 +37,9 @@ data/simulation_time.txt
 data/skygate.db
 data/skygate.db-wal
 data/skygate.db-shm
+
+# Diagrams and Reports
+*.docx
+~$*.docx
+*.drawio
+.$*.drawio*
