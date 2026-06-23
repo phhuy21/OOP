@@ -765,36 +765,46 @@ function openModal(code) {
     
     return `
       <div class="pax-line">
-        <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:1px 5px;">${stText}</span>)</small></span>
+        <div class="pax-meta">
+          <span class="pax-name">${esc(name)}</span>
+          <span class="pax-id">${esc(pid)}</span>
+          <span class="badge ${statusClass}">${stText}</span>
+        </div>
         <span class="pax-actions">
-          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${isBtnDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} title="${esc(btnTitle)}">
+          <button class="btn btn-sm" onclick="showSeatPicker('${code}','${pid}')" ${isBtnDisabled ? 'disabled' : ''} title="${esc(btnTitle)}">
             <i data-lucide="check-square"></i> Check-in
           </button>
-          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${p && (!p.checkedIn || p.boarded) ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${p && (!p.checkedIn || p.boarded) ? 'disabled' : ''}>
             <i data-lucide="navigation-2"></i> Lên máy bay
           </button>
         </span>
       </div>`;
   }).join("") || "<p class='hint'><i data-lucide='users'></i> Chuyến chưa có hành khách nào đăng ký.</p>";
 
+  const isPastTakeoff = ['Takeoff', 'InAir', 'Landed', 'Turnaround', 'Completed', 'Cancelled'].includes(f.status);
+  let adminOpsHtml = "";
+  if (!isPastTakeoff) {
+    adminOpsHtml = `
+      <h4><i data-lucide="clock-alert" style="width:14px; height:14px; vertical-align:middle;"></i> Hoãn chuyến</h4>
+      <div class="field">
+        <input id="m-min" placeholder="Số phút (ví dụ 60)" type="text" />
+        <input id="m-reason" placeholder="Lý do hoãn chuyến" type="text" />
+        <button class="btn btn-sm" onclick="doDelay('${code}')">Hoãn</button>
+      </div>
+      
+      <h4><i data-lucide="ban" style="width:14px; height:14px; vertical-align:middle;"></i> Huỷ chuyến</h4>
+      <div class="field">
+        <input id="m-creason" placeholder="Lý do huỷ chuyến" type="text" />
+        <button class="btn btn-sm btn-warn" onclick="doCancel('${code}')">Huỷ chuyến</button>
+      </div>`;
+  }
+
   $("#modal-body").innerHTML = `
     <h4 style="margin-top:0"><i data-lucide="users" style="width:14px; height:14px; vertical-align:middle;"></i> Hành khách</h4>
     ${pax}
     
     <div id="seat-picker-container"></div>
-    
-    <h4><i data-lucide="clock-alert" style="width:14px; height:14px; vertical-align:middle;"></i> Hoãn chuyến</h4>
-    <div class="field">
-      <input id="m-min" placeholder="Số phút (ví dụ 60)" type="text" />
-      <input id="m-reason" placeholder="Lý do hoãn chuyến" type="text" />
-      <button class="btn btn-sm" onclick="doDelay('${code}')">Hoãn</button>
-    </div>
-    
-    <h4><i data-lucide="ban" style="width:14px; height:14px; vertical-align:middle;"></i> Huỷ chuyến</h4>
-    <div class="field">
-      <input id="m-creason" placeholder="Lý do huỷ chuyến" type="text" />
-      <button class="btn btn-sm btn-warn" onclick="doCancel('${code}')">Huỷ chuyến</button>
-    </div>`;
+    ${adminOpsHtml}`;
     
   $("#modal").classList.remove("hidden");
   lucide.createIcons();
@@ -958,8 +968,17 @@ function initCreateForm() {
     `<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join("");
   setOpts("#c-origin", apOpts);
   setOpts("#c-dest", apOpts);
+
+  // Lọc các máy bay đang bận (đang gán cho chuyến bay chưa hoàn thành/hủy)
+  const busyAircrafts = new Set(
+    STATE.flights
+      .filter((f) => f.aircraft && !["Completed", "Cancelled"].includes(f.status))
+      .map((f) => f.aircraft)
+  );
+  const availableAircrafts = STATE.aircrafts.filter((a) => !busyAircrafts.has(a.registration));
+
   setOpts("#c-aircraft", `<option value="">(chưa gán)</option>` +
-    STATE.aircrafts.map((a) =>
+    availableAircrafts.map((a) =>
       `<option value="${a.registration}">${a.registration} · ${esc(a.category)}</option>`).join(""));
   setOpts("#c-crew", `<option value="">(chưa gán)</option>` +
     STATE.crews.map((c) => `<option value="${c.id}">${c.id}</option>`).join(""));

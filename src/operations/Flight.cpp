@@ -155,7 +155,11 @@ OpResult Flight::boardPassenger(const std::string& passengerId) {
 }
 
 OpResult Flight::delay(long long minutes, const std::string& reason) {
-    if (isFinished()) return OpResult::failure("Chuyến đã kết thúc, không thể hoãn.");
+    if (status_ == FlightStatus::Takeoff || status_ == FlightStatus::InAir ||
+        status_ == FlightStatus::Landed || status_ == FlightStatus::Turnaround ||
+        status_ == FlightStatus::Completed || status_ == FlightStatus::Cancelled) {
+        return OpResult::failure("Chuyến bay đang bay hoặc đã kết thúc, không thể hoãn.");
+    }
     if (minutes > 0 && departure_.isValid()) {
         departure_ = departure_.addMinutes(minutes);
         if (arrival_.isValid()) arrival_ = arrival_.addMinutes(minutes);
@@ -166,8 +170,10 @@ OpResult Flight::delay(long long minutes, const std::string& reason) {
 }
 
 OpResult Flight::cancel(const std::string& reason) {
-    if (status_ == FlightStatus::Completed) {
-        return OpResult::failure("Chuyến đã hoàn tất, không thể huỷ.");
+    if (status_ == FlightStatus::Takeoff || status_ == FlightStatus::InAir ||
+        status_ == FlightStatus::Landed || status_ == FlightStatus::Turnaround ||
+        status_ == FlightStatus::Completed || status_ == FlightStatus::Cancelled) {
+        return OpResult::failure("Chuyến bay đang bay hoặc đã kết thúc, không thể huỷ.");
     }
     status_ = FlightStatus::Cancelled;
     note_ = "Huỷ: " + reason;

@@ -267,16 +267,54 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 10px;
-  background: rgba(15, 23, 42, 0.02);
-  border: 1px solid rgba(15, 23, 42, 0.04);
-  border-radius: 6px;
-  margin-bottom: 6px;
-  font-size: 13px;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.01);
+  transition: all 0.2s ease;
+}
+.pax-line:hover {
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+.pax-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.pax-name {
+  font-weight: 600;
+  color: var(--txt);
+  font-size: 14px;
+}
+.pax-id {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(15, 23, 42, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
 }
 .pax-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.pax-actions button {
+  white-space: nowrap !important;
+}
+.btn:disabled, .btn[disabled] {
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 .modal-box h4 {
   font-size: 13px;

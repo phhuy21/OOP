@@ -270,6 +270,22 @@ OpResult AirportSystem::assignAircraft(const std::string& flightCode,
                                  ") vượt sức chứa máy bay (" + std::to_string(ac->capacity()) + ").");
     }
 
+    // Kiểm tra trùng lịch bay của máy bay
+    for (const auto& other : flights_) {
+        if (other->code() == flightCode) continue;
+        if (other->isFinished()) continue;
+        if (other->aircraft() && other->aircraft()->registration() == registration) {
+            int turnaround = ac->minTurnaroundMinutes();
+            if (!(f->arrival().addMinutes(turnaround) <= other->departure() ||
+                  other->arrival().addMinutes(turnaround) <= f->departure())) {
+                return OpResult::failure("Máy bay " + registration + " đang bận thực hiện chuyến bay " +
+                                         other->code() + " (Lịch bay: " + other->departure().toString() + 
+                                         " -> " + other->arrival().toString() + ", cần thời gian quay đầu " + 
+                                         std::to_string(turnaround) + " phút).");
+            }
+        }
+    }
+
     f->setAircraft(ac);
     logEvent(flightCode + ": gán máy bay " + registration + ".");
     return OpResult::success("Đã gán máy bay " + registration + " cho chuyến " + flightCode + ".");

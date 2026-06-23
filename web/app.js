@@ -369,11 +369,20 @@ function renderMonitor() {
         text: `Chuyến <b>${esc(f.code)}</b> sắp đầy — còn <b>${f.availableSeats}</b> ghế.` });
     }
   }
-  // Hành khách hành lý quá cân.
+  // Hành khách hành lý quá cân hoặc quá số kiện.
   const overweight = STATE.passengers.filter((p) => p.bagOverweight && p.flight);
   for (const p of overweight) {
-    alerts.push({ level: "info", icon: "luggage",
-      text: `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) hành lý quá cân: ${p.bagWeight}kg.` });
+    let warningText = "";
+    if (p.bagPieces > 2 && p.bagWeight > 46.0) {
+      warningText = `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) hành lý vượt quá số kiện (${p.bagPieces} kiện) và quá cân (${p.bagWeight}kg).`;
+    } else if (p.bagPieces > 2) {
+      warningText = `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) mang quá số kiện cho phép: <b>${p.bagPieces} kiện</b> (cho phép tối đa 2 kiện).`;
+    } else if (p.bagWeight > 46.0) {
+      warningText = `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) hành lý quá cân: <b>${p.bagWeight}kg</b> (cho phép tối đa 46kg).`;
+    } else {
+      warningText = `Hành khách <b>${esc(p.name)}</b> (${esc(p.flight)}) hành lý vượt tiêu chuẩn: ${p.bagPieces} kiện, ${p.bagWeight}kg.`;
+    }
+    alerts.push({ level: "info", icon: "luggage", text: warningText });
   }
 
   const alertsBox = $("#alerts-list");
@@ -454,12 +463,16 @@ function openModal(code) {
     
     return `
       <div class="pax-line">
-        <span><b>${esc(name)}</b> <small>(${esc(pid)} · <span class="badge ${statusClass}" style="font-size:9px; padding:2px 6px;">${stText}</span>)</small></span>
+        <div class="pax-meta">
+          <span class="pax-name">${esc(name)}</span>
+          <span class="pax-id">${esc(pid)}</span>
+          <span class="badge ${statusClass}">${stText}</span>
+        </div>
         <span class="pax-actions">
-          <button class="btn btn-sm" onclick="doCheckin('${code}','${pid}')" ${checkinDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+          <button class="btn btn-sm" onclick="doCheckin('${code}','${pid}')" ${checkinDisabled ? 'disabled' : ''}>
             <i data-lucide="check-square" style="width:12px; height:12px; vertical-align:middle; margin-right:2px;"></i> Check-in
           </button>
-          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${boardDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+          <button class="btn btn-sm" onclick="doBoard('${code}','${pid}')" ${boardDisabled ? 'disabled' : ''}>
             <i data-lucide="navigation-2" style="width:12px; height:12px; vertical-align:middle; margin-right:2px;"></i> Lên máy bay
           </button>
         </span>
@@ -472,17 +485,18 @@ function openModal(code) {
     const bulkBoardDisabled = f.status !== 'Boarding';
     bulkHtml = `
       <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <button class="btn btn-sm" onclick="doCheckinAll('${code}')" ${bulkCheckinDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="flex: 1;">
+        <button class="btn btn-sm" onclick="doCheckinAll('${code}')" ${bulkCheckinDisabled ? 'disabled' : ''} style="flex: 1;">
           <i data-lucide="check-square"></i> Check-in toàn bộ
         </button>
-        <button class="btn btn-sm" onclick="doBoardAll('${code}')" ${bulkBoardDisabled ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="flex: 1;">
+        <button class="btn btn-sm" onclick="doBoardAll('${code}')" ${bulkBoardDisabled ? 'disabled' : ''} style="flex: 1;">
           <i data-lucide="navigation-2"></i> Cho lên toàn bộ
         </button>
       </div>`;
   }
 
   let adminOpsHtml = "";
-  if (isRole("Admin")) {
+  const isPastTakeoff = ['Takeoff', 'InAir', 'Landed', 'Turnaround', 'Completed', 'Cancelled'].includes(f.status);
+  if (isRole("Admin") && !isPastTakeoff) {
     adminOpsHtml = `
       <h4><i data-lucide="clock" style="width:14px; height:14px; vertical-align:middle;"></i> Hoãn chuyến</h4>
       <div class="field">
@@ -661,12 +675,69 @@ function addMinutesToLocal(local, mins) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// Phân tích chuỗi thời gian "YYYY-MM-DD HH:MM" hoặc "YYYY-MM-DDTHH:MM" thành đối tượng Date
+function parseDateStr(s) {
+  if (!s) return null;
+  const clean = s.replace("T", " ");
+  const [d, t] = clean.split(" ");
+  if (!d || !t) return null;
+  const [Y, M, D] = d.split("-").map(Number);
+  const [h, m] = t.split(":").map(Number);
+  return new Date(Y, (M || 1) - 1, D || 1, h || 0, m || 0);
+}
+
+// Cập nhật danh sách máy bay rảnh rỗi dựa trên lịch bay đã nhập
+function updateAvailableAircrafts() {
+  if (!STATE) return;
+  const cDepVal = $("#c-dep").value;
+  const cArrVal = $("#c-arr").value;
+  const newDep = parseDateStr(cDepVal);
+  const newArr = parseDateStr(cArrVal);
+
+  const availableAircrafts = STATE.aircrafts.filter((a) => {
+    // Kiểm tra xem máy bay có bị trùng lịch với chuyến bay nào đang hoạt động không
+    for (const f of STATE.flights) {
+      if (!f.aircraft || f.aircraft !== a.registration) continue;
+      if (["Completed", "Cancelled"].includes(f.status)) continue;
+
+      if (newDep && newArr) {
+        const otherDep = parseDateStr(f.departure);
+        const otherArr = parseDateStr(f.arrival);
+        if (otherDep && otherArr) {
+          const turnaroundMs = a.turnaround * 60000;
+          const newArrWithTurnaround = new Date(newArr.getTime() + turnaroundMs);
+          const otherArrWithTurnaround = new Date(otherArr.getTime() + turnaroundMs);
+          if (!(newArrWithTurnaround <= otherDep || otherArrWithTurnaround <= newDep)) {
+            return false; // Bị trùng lịch
+          }
+        }
+      } else {
+        // Nếu chưa nhập đủ giờ bay mới, coi như bận nếu đang chạy chuyến nào đó
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const currentSelected = $("#c-aircraft").value;
+  setOpts("#c-aircraft", `<option value="">(chưa gán)</option>` +
+    availableAircrafts.map((a) =>
+      `<option value="${a.registration}">${a.registration} · ${esc(a.category)}</option>`).join(""));
+  
+  if (availableAircrafts.some(a => a.registration === currentSelected)) {
+    $("#c-aircraft").value = currentSelected;
+  } else {
+    $("#c-aircraft").value = "";
+  }
+}
+
 // Tự điền giờ đến = giờ đi + thời lượng bay của thành phố đã chọn.
 function updateArrival() {
   const city = $("#c-dest").value;
   const dep = $("#c-dep").value;
   const item = CITY_DURATIONS.find((c) => c.name === city);
   $("#c-arr").value = item && dep ? addMinutesToLocal(dep, item.min) : "";
+  updateAvailableAircrafts();
 }
 
 function initCreateForm() {
@@ -676,9 +747,8 @@ function initCreateForm() {
     `<option value="${a.code}">${a.code} — ${esc(a.name)}</option>`).join(""));
   setOpts("#c-dest", CITY_DURATIONS.map((c) =>
     `<option value="${esc(c.name)}">${esc(c.name)} · ${c.min}'</option>`).join(""));
-  setOpts("#c-aircraft", `<option value="">(chưa gán)</option>` +
-    STATE.aircrafts.map((a) =>
-      `<option value="${a.registration}">${a.registration} · ${esc(a.category)}</option>`).join(""));
+
+  updateAvailableAircrafts();
   setOpts("#c-gate", `<option value="">Tự động</option>`);
   updateArrival();
 }
