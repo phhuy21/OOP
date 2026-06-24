@@ -412,7 +412,7 @@ function renderMonitor() {
               <div class="mstat"><span class="mstat-num">${f.paxCount}</span><span class="mstat-lbl">Đã đặt</span></div>
               <div class="mstat"><span class="mstat-num">${f.availableSeats >= 0 ? f.availableSeats : "—"}</span><span class="mstat-lbl">Ghế trống</span></div>
             </div>
-            <div class="loadbar"><div class="loadbar-fill" style="width:${pct}%;"></div></div>
+            <div class="loadbar"><div class="loadbar-fill" style="--fill-pct: ${pct / 100};"></div></div>
             <div class="row" style="font-size:11px; color:var(--muted);">Lấp đầy ${pct}% (${f.paxCount}/${f.capacity || "?"})</div>
           </div>`;
         }).join("")
@@ -464,9 +464,13 @@ function openModal(code) {
     return `
       <div class="pax-line">
         <div class="pax-meta">
-          <span class="pax-name">${esc(name)}</span>
-          <span class="pax-id">${esc(pid)}</span>
-          <span class="badge ${statusClass}">${stText}</span>
+          <div class="pax-user-info">
+            <span class="pax-name">${esc(name)}</span>
+            <span class="pax-id">${esc(pid)}</span>
+          </div>
+          <div class="pax-status-wrap">
+            <span class="badge ${statusClass}">${stText}</span>
+          </div>
         </div>
         <span class="pax-actions">
           <button class="btn btn-sm" onclick="doCheckin('${code}','${pid}')" ${checkinDisabled ? 'disabled' : ''}>
