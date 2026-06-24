@@ -20,6 +20,9 @@ coordinator_state.json
 .idea/
 .codegraph/
 .claude/
+CLAUDE.md
+generate_report.py
+test_run.py
 *.suo
 *.user
 *.userossc
