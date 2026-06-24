@@ -236,7 +236,6 @@ function renderAircrafts() {
         <td><span class="badge scheduled">${esc(a.category)}</span></td>
         <td><b>${a.capacity}</b> ghế</td>
         <td>${a.requiredRunway}m</td>
-        <td>${a.turnaround}'</td>
         <td>${statusBadge}</td>
         <td>${admin ? `<button class="btn btn-sm btn-warn" onclick="doDeleteAircraft('${esc(a.registration)}')"><i data-lucide="trash-2"></i></button>` : ""}</td>
       </tr>`;
